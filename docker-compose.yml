@@ -1,24 +1,62 @@
-version: '3.8'
+version: "3.8"
 
 services:
-    JH0103-db:
-        image: mysql:8.0
-        container_name: JH0103-db
-        environment: MYSQL_ROOT_PASSWORD: root
-        ports: 3306:3306
-        volumes:
-            - ./infra/db/init:/docker-entrypoint-initdb.d/
-            - db_data:/var/lib/mysql
-    auth-service:
-        build: ./services/auth-service
-        container_name: auth_service
-        ports: 8080:8080
-        depends_on:
-            - JH0103-db
-        environment:
-            SPRING_DATASOURCE_URL: jdbc:mysql://JH0103-db:3306/auth_db
-            SPRING_DATASOURCE_USERNAME: root
-            SPRING_DATASOURCE_PASSWORD: root
+  jh0103-db:
+    image: mysql:8.0
+    container_name: jh0103-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u${MYSQL_ROOT_PASSWORD} -p${MYSQL_ROOT_PASSWORD} || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      target: runtime
+    container_name: auth_service
+    ports:
+      - "8080:8080"
+    depends_on:
+      jh0103-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://jh0103-db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      
+      NAVER_CLIENT_ID: ${NAVER_CLIENT_ID}
+      NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET}
+
+  auth-service-test:
+    profiles: ["test"]
+    build:
+      context: ./services/auth-service
+      target: builder
+    depends_on:
+      jh0103-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://jh0103-db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+    command: ["gradle", "test", "--no-daemon"]
 
 volumes:
-    db_data:
+  db_data:

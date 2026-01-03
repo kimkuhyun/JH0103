@@ -1,0 +1,12 @@
+.env
+*.env
+.DS_Store
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+.idea
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.log
