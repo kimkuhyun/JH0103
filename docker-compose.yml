@@ -13,7 +13,7 @@ services:
       - "3306:3306"
     volumes:
       - ./infra/db/init:/docker-entrypoint-initdb.d:ro
-      - db_data:/var/lib/mysql
+      - db-data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u${MYSQL_ROOT_PASSWORD} -p${MYSQL_ROOT_PASSWORD} || exit 1"]
       interval: 5s
@@ -59,4 +59,4 @@ services:
     command: ["gradle", "test", "--no-daemon"]
 
 volumes:
-  db_data:
+  db-data:
