@@ -10,14 +10,14 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "users")
 public class User{
-    @ID
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = flase)
+    @Column(nullable = false)
     private String email;
 
     @Column
