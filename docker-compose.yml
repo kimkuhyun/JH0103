@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+    JH0103-db:
+        image: mysql:8.0
+        container_name: JH0103-db
+        environment: MYSQL_ROOT_PASSWORD: root
+        ports: 3306:3306
+        volumes:
+            - ./infra/db/init:/docker-entrypoint-initdb.d/
+            - db_data:/var/lib/mysql
+    auth-service:
+        build: ./services/auth-service
+        container_name: auth_service
+        ports: 8080:8080
+        depends_on:
+            - JH0103-db
+        environment:
+            SPRING_DATASOURCE_URL: jdbc:mysql://JH0103-db:3306/auth_db
+            SPRING_DATASOURCE_USERNAME: root
+            SPRING_DATASOURCE_PASSWORD: root
+
+volumes:
+    db_data:
