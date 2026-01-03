@@ -16,7 +16,7 @@ jobs:
 
     - name: Run Test with Docker Compose
       run: |
-        docker-compose -f docker-compose.yml up --build --exit-code-from auth-service-test
+        docker compose -f docker-compose.yml up --build --exit-code-from auth-service-test
       env:
         MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
         MYSQL_DATABASE: auth_db
