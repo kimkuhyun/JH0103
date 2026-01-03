@@ -19,7 +19,7 @@ import java.util.Collections;
 
 @RequiredArgsConstructor
 @Service
-public class CustomOauth2UserService implements OAuth2UserService<OAuth2UserRequest,OAuth2User>{
+public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequest,OAuth2User>{
     
     private final UserRepository userRepository;
     private final HttpSession httpSession;
@@ -33,7 +33,7 @@ public class CustomOauth2UserService implements OAuth2UserService<OAuth2UserRequ
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
 
         String userNameAttributeName = userRequest.getClientRegistration().getProviderDetails()
-                .getUserInfoEndPoint().getUserNameAttributeName();
+                .getUserInfoEndpoint().getUserNameAttributeName();
 
         OAuthAttributes attributes = OAuthAttributes.of(registrationId, userNameAttributeName, oAuth2User.getAttributes());
     
@@ -45,7 +45,7 @@ public class CustomOauth2UserService implements OAuth2UserService<OAuth2UserRequ
             Collections.singleton(new SimpleGrantedAuthority(user.getRoleKey())),
             attributes.getAttributes(),
             attributes.getNameAttributeKey()
-        )
+        );
     }
 
     private User saveOrUpdate(OAuthAttributes attributes){

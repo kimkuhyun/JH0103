@@ -1,6 +1,6 @@
 package com.jh0103.authservice.config;
 
-import com.jh0103.authservice.service.CustomOAuth2UserService; // Import 추가
+import com.jh0103.authservice.service.CustomOAuth2UserService; 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,8 +27,7 @@ public class SecurityConfig {
             .oauth2Login(oauth2 -> oauth2
                 // .loginPage("/login") 
                 .defaultSuccessUrl("http://localhost:3000/login-success", true) 
-                    .userService(customOAuth2UserService) 
-                )
+                .userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService)
             );
             
         return http.build();

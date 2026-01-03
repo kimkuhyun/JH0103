@@ -3,7 +3,7 @@ package com.jh0103.authservice.domain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Builder;
-import NoArgsConstructor;
+import lombok.NoArgsConstructor;
 
 @Getter
 @NoArgsConstructor
