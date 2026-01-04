@@ -1,16 +1,6 @@
 version: "3.8"
 
 services:
-  ui-installer:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./UI:/app
-    command: >
-      sh -c "npm create vite@latest . -- --template react-ts && 
-             npm install && 
-             npm install -D tailwindcss postcss autoprefixer && 
-             npx tailwindcss init -p"
   jh0103-db:
     image: mysql:8.0
     container_name: jh0103-db
@@ -31,19 +21,29 @@ services:
       retries: 20
   
   ui-service:
+    image: node:20-alpine
     container_name: ui-service
-    build:
-      context: ./UI
-      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./UI:/app             
+      - /app/node_modules    
     ports:
       - "5173:5173"
-    volumes:
-      - ./UI:/app 
-      - /app/node_modules
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-    stdin_open: true
-    tty: true
+    command: >
+      sh -c "
+        if [ ! -f package.json ]; then
+          echo '📂 프로젝트 생성 및 Tailwind v3 설치 중...'
+          npm create vite@latest temp_proj -- --template react-ts --yes
+          cp -r temp_proj/. .
+          rm -rf temp_proj
+          npm install
+          npm install -D tailwindcss@3.4.17 postcss autoprefixer
+          npx tailwindcss init -p
+        fi
+        echo '🚀 서버 실행 중...'
+        npm install
+        npm run dev -- --host
+      "
 
   auth-service:
     build:

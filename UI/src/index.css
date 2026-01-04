@@ -2,11 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-
 body {
   margin: 0;
   padding: 0;
   background-color: #f8fafc; 
-  color: #0f172a; 
+  color: #0f172a;
   min-height: 100vh;
 }
