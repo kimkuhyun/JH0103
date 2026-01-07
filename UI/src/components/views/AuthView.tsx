@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState, FormEvent } from 'react';
+import React, { useEffect, useMemo, useState, FormEvent, type Provider } from 'react';
 
 interface AuthViewProps {
   onRegister: (username: string, displayName: string) => Promise<boolean> | boolean;
-  onLogin: (username?: string) => Promise<void> | void;
+  //onLogin: (username?: string) => Promise<void> | void;
+  onLogin: (provider: string) => void;
   onRecovery: (username: string, code: string) => Promise<void> | void;
   notice?: string | null;
   error?: string | null;
@@ -59,12 +60,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
   }, [displayName]);
 
   const canRegister = registerUsername.trim().length > 0 && !usernameIssue && !displayNameIssue;
-
+/** 
   const handleLoginSubmit = (e: FormEvent) => {
     e.preventDefault();
     onLogin(loginUsername.trim() || undefined);
   };
-
+*/
+  const handleLoginSubmit = (provider: string) => {
+    onLogin(provider);
+  }
   const handleRegisterSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (isRegistering || !canRegister) return;
@@ -114,6 +118,33 @@ export const AuthView: React.FC<AuthViewProps> = ({
             <form onSubmit={handleLoginSubmit} className="space-y-5">
 
               <div className="space-y-3 pt-2">
+                {/* 구글 로그인 버튼 */}
+              <button
+                type="button"
+                onClick={() => handleLoginSubmit('google')}
+                className="w-full bg-white border border-slate-300 hover:bg-slate-50 transition-colors text-slate-700 px-4 py-3 rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2"
+              >
+                {/* 구글 아이콘 (필요시 svg 추가) */}
+                <span>Google로 계속하기</span>
+              </button>
+
+              {/* 네이버 로그인 버튼 */}
+              <button
+                type="button"
+                onClick={() => handleLoginSubmit('naver')}
+                className="w-full bg-[#03C75A] hover:bg-[#02b351] transition-colors text-white px-4 py-3 rounded-lg text-sm font-bold shadow-sm"
+              >
+                Naver로 계속하기
+              </button>
+
+               {/* 깃허브 로그인 버튼 */}
+               
+                
+              <div className="relative flex py-2 items-center">
+                  <div className="flex-grow border-t border-slate-100"></div>
+                  <span className="flex-shrink-0 mx-4 text-xs text-slate-400">또는</span>
+                  <div className="flex-grow border-t border-slate-100"></div>
+              </div>
                 <button
                   type="submit"
                   className="w-full bg-[#0052CC] hover:bg-[#0747A6] active:bg-[#003D99] transition-colors text-white px-4 py-3 rounded-lg text-sm font-bold shadow-sm"
