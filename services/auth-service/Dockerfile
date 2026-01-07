@@ -1,14 +1,13 @@
-FROM gradle:8.14-jdk17 AS builder
+FROM gradle:8.5-jdk21-alpine AS builder
 WORKDIR /app
-COPY . .
-RUN gradle build -x test --no-daemon
+COPY build.gradle settings.gradle ./
+RUN gradle dependencies --no-daemon
+COPY src ./src
+RUN gradle bootJar -x test --no-daemon
 
-
-FROM builder AS test
-RUN gradle test --no-daemon
-
-
-FROM eclipse-temurin:17-jre AS runtime
+FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
 COPY --from=builder /app/build/libs/app.jar app.jar
 ENTRYPOINT ["java", "-jar", "app.jar"]

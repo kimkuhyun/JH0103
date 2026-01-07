@@ -49,6 +49,7 @@ services:
     build:
       context: ./services/auth-service
       target: runtime
+      dockerfile: Dockerfile
     container_name: auth_service
     ports:
       - "8080:8080"
@@ -70,10 +71,14 @@ services:
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET}
 
   auth-service-test:
-    profiles: ["test"]
+    profiles: ["auth-service-test"]
     build:
       context: ./services/auth-service
       target: builder
+      dockerfile: Dockerfile
+    volumes:
+      - ./services/auth-service:/app  
+      - /app/build
     depends_on:
       jh0103-db:
         condition: service_healthy
