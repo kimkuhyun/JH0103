@@ -1,14 +1,12 @@
-import React, { useEffect, useMemo, useState, FormEvent, type Provider } from 'react';
+import React, { useEffect, useMemo, useState, FormEvent } from 'react';
 
 interface AuthViewProps {
   onRegister: (username: string, displayName: string) => Promise<boolean> | boolean;
-  //onLogin: (username?: string) => Promise<void> | void;
-  onLogin: (provider: string) => void;
+  onLogin: (provider: string) => void; 
   onRecovery: (username: string, code: string) => Promise<void> | void;
   notice?: string | null;
   error?: string | null;
 }
-
 
 const INPUT_BASE_CLASS = "w-full bg-white border rounded-lg px-4 py-2.5 text-sm outline-none transition-all placeholder:text-slate-400";
 const INPUT_DEFAULT_CLASS = `${INPUT_BASE_CLASS} border-slate-300 focus:border-[#0052CC] focus:ring-1 focus:ring-[#0052CC] text-[#202124]`;
@@ -24,7 +22,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [registerUsername, setRegisterUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [loginUsername, setLoginUsername] = useState('');
   const [recoveryUsername, setRecoveryUsername] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
   const [showRecovery, setShowRecovery] = useState(false);
@@ -35,7 +32,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
       setRegisterUsername('');
       setDisplayName('');
     } else {
-      setLoginUsername('');
       setRecoveryUsername('');
       setRecoveryCode('');
       setShowRecovery(false);
@@ -60,15 +56,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
   }, [displayName]);
 
   const canRegister = registerUsername.trim().length > 0 && !usernameIssue && !displayNameIssue;
-/** 
-  const handleLoginSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    onLogin(loginUsername.trim() || undefined);
-  };
-*/
-  const handleLoginSubmit = (provider: string) => {
+
+  // 로그인 버튼 클릭 핸들러 (폼 제출과 분리)
+  const handleSocialLogin = (provider: string) => {
     onLogin(provider);
-  }
+  };
+
+  const handlePasskeyLogin = () => {
+    alert("패스키 로그인은 준비 중입니다.");
+  };
+
   const handleRegisterSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (isRegistering || !canRegister) return;
@@ -87,9 +84,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   };
 
   return (
-    // 배경색 #F8FAFC (연한 그레이)로 카드와 구분감 제공
     <div className="min-h-screen bg-[#F8FAFC] text-[#202124] flex items-center justify-center p-6 font-sans">
-      {/* 메인 카드: #FFFFFF 배경 */}
       <div className="w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-8 md:p-10 space-y-8 shadow-sm">
         
         <header className="space-y-2">
@@ -110,63 +105,59 @@ export const AuthView: React.FC<AuthViewProps> = ({
               </button>
             )}
           </div>
-          
         </header>
 
         {mode === 'login' ? (
           <>
-            <form onSubmit={handleLoginSubmit} className="space-y-5">
-
-              <div className="space-y-3 pt-2">
-                {/* 구글 로그인 버튼 */}
+            <div className="space-y-3 pt-2">
+              {/* 패스키 로그인 (가장 상단 유지) */}
               <button
                 type="button"
-                onClick={() => handleLoginSubmit('google')}
+                onClick={handlePasskeyLogin}
+                className="w-full bg-[#0052CC] hover:bg-[#0747A6] active:bg-[#003D99] transition-colors text-white px-4 py-3 rounded-lg text-sm font-bold shadow-sm"
+              >
+                패스키로 로그인
+              </button>
+
+              <div className="relative flex py-2 items-center">
+                  <div className="flex-grow border-t border-slate-100"></div>
+                  <span className="flex-shrink-0 mx-4 text-xs text-slate-400">또는 소셜 계정으로 계속하기</span>
+                  <div className="flex-grow border-t border-slate-100"></div>
+              </div>
+
+              {/* 구글 로그인 */}
+              <button
+                type="button"
+                onClick={() => handleSocialLogin('google')}
                 className="w-full bg-white border border-slate-300 hover:bg-slate-50 transition-colors text-slate-700 px-4 py-3 rounded-lg text-sm font-bold shadow-sm flex items-center justify-center gap-2"
               >
-                {/* 구글 아이콘 (필요시 svg 추가) */}
-                <span>Google로 계속하기</span>
+                Google
               </button>
 
-              {/* 네이버 로그인 버튼 */}
+              {/* 네이버 로그인 */}
               <button
                 type="button"
-                onClick={() => handleLoginSubmit('naver')}
+                onClick={() => handleSocialLogin('naver')}
                 className="w-full bg-[#03C75A] hover:bg-[#02b351] transition-colors text-white px-4 py-3 rounded-lg text-sm font-bold shadow-sm"
               >
-                Naver로 계속하기
+                Naver
               </button>
 
-               {/* 깃허브 로그인 버튼 */}
-               
                 
               <div className="relative flex py-2 items-center">
                   <div className="flex-grow border-t border-slate-100"></div>
-                  <span className="flex-shrink-0 mx-4 text-xs text-slate-400">또는</span>
+                  <span className="flex-shrink-0 mx-4 text-xs text-slate-400">아직 회원이 아니신가요?</span>
                   <div className="flex-grow border-t border-slate-100"></div>
               </div>
-                <button
-                  type="submit"
-                  className="w-full bg-[#0052CC] hover:bg-[#0747A6] active:bg-[#003D99] transition-colors text-white px-4 py-3 rounded-lg text-sm font-bold shadow-sm"
-                >
-                  패스키로 로그인
-                </button>
-                
-                <div className="relative flex py-2 items-center">
-                    <div className="flex-grow border-t border-slate-100"></div>
-                    <span className="flex-shrink-0 mx-4 text-xs text-slate-400">또는</span>
-                    <div className="flex-grow border-t border-slate-100"></div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setMode('register')}
-                  className="w-full bg-white hover:bg-slate-50 border border-slate-200 transition-colors text-[#202124] px-4 py-3 rounded-lg text-sm font-semibold"
-                >
-                  새 계정 만들기
-                </button>
-              </div>
-            </form>
+              <button
+                type="button"
+                onClick={() => setMode('register')}
+                className="w-full bg-white hover:bg-slate-50 border border-slate-200 transition-colors text-[#202124] px-4 py-3 rounded-lg text-sm font-semibold"
+              >
+                새 계정 만들기
+              </button>
+            </div>
 
             <div className="border-t border-slate-100 pt-6">
               <button
@@ -174,7 +165,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 onClick={() => setShowRecovery((prev) => !prev)}
                 className="w-full flex items-center justify-between text-sm font-medium text-slate-500 hover:text-[#202124]"
               >
-                
                 <span className="text-xs font-normal underline">{showRecovery ? '닫기' : '복구 코드로 로그인'}</span>
               </button>
               
@@ -214,6 +204,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </>
         ) : (
           <form onSubmit={handleRegisterSubmit} className="space-y-6">
+            {/* 회원가입 폼은 기존 코드와 동일 */}
             <div className="space-y-4">
               <div className="space-y-1">
                 <label htmlFor="register-username" className="text-sm font-semibold text-[#202124]">아이디 (이메일)</label>

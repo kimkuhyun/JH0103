@@ -13,7 +13,7 @@ public class UserController{
     
     private final HttpSession httpSession;
 
-    @GetMapping("/apt/v1/user")
+    @GetMapping("/api/v1/user")
     public ResponseEntity<SessionUser> getUser(){
         SessionUser user = (SessionUser) httpSession.getAttribute("user");
 
