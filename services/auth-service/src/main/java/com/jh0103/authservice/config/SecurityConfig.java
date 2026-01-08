@@ -10,6 +10,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpStatus;
+
 
 import java.util.Arrays;
 
@@ -31,10 +33,20 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
-                .defaultSuccessUrl("http://localhost:5173/login-success", true)
+                .defaultSuccessUrl("http://localhost:5173", true)
                 .userInfoEndpoint(userInfo -> userInfo
                     .userService(customOAuth2UserService)
                 )
+            )
+            .logout(logout -> logout
+                .logoutUrl("/api/v1/auth/logout") 
+                .logoutSuccessHandler((request, response, authentication) -> {
+                    response.setStatus(HttpStatus.OK.value()); 
+                })
+                .deleteCookies("JSESSIONID") 
+                .invalidateHttpSession(true) 
+                .clearAuthentication(true)
+                .permitAll()
             );
 
         return http.build();
