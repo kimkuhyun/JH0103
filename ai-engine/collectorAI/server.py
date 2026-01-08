@@ -15,30 +15,27 @@ SAVE_DIR = "/app/data" # 도커 내부 경로
 if not os.path.exists(SAVE_DIR):
     os.makedirs(SAVE_DIR)
 
-def resize_image_for_ai(base64_str):
-    """AI에게 보내기 전에 이미지를 최적화(리사이징)하는 함수"""
+def resize_image(base64_str, max_size=640):  # 1024에서 800으로 조금 더 줄여서 안전성 확보
     try:
         # Base64 디코딩
-        image_data = base64.b64decode(base64_str)
-        img = Image.open(io.BytesIO(image_data))
+        img_data = base64.b64decode(base64_str)
+        img = Image.open(io.BytesIO(img_data))
         
-        # 1. RGB 변환 (PNG 투명도 문제 해결)
+        # 투명 배경(RGBA)이 있으면 검은색으로 나올 수 있으므로 RGB로 변환
         if img.mode != 'RGB':
             img = img.convert('RGB')
-            
-        # 2. 리사이징 (긴 변 기준 1000px)
-        MAX_SIZE = 1000
-        if max(img.size) > MAX_SIZE:
-            img.thumbnail((MAX_SIZE, MAX_SIZE), Image.Resampling.LANCZOS)
-            
-        # 3. JPEG 압축 (품질 70)
+
+        # 비율 유지하며 리사이징
+        img.thumbnail((max_size, max_size))
+        
+        # 다시 Base64로 변환 (JPEG가 호환성이 더 좋고 가벼움)
         buffer = io.BytesIO()
-        img.save(buffer, format="JPEG", quality=70)
+        img.save(buffer, format="JPEG", quality=85)
         return base64.b64encode(buffer.getvalue()).decode('utf-8')
     except Exception as e:
-        print(f"⚠️ 이미지 처리 실패 (원본 사용): {e}")
+        print(f"이미지 리사이징 실패: {e}")
         return base64_str
-
+    
 @app.route('/analyze', methods=['POST'])
 def analyze():
     print("📥 [Server] 데이터 수신! 분석 준비 중...")
@@ -46,7 +43,7 @@ def analyze():
     raw_images = data.get('images', [])
     
     # ⭐ 여기서 파이썬이 이미지를 싹 다이어트 시킵니다
-    optimized_images = [resize_image_for_ai(img) for img in raw_images]
+    optimized_images = [resize_image(img) for img in raw_images]
     print(f"✨ 이미지 {len(raw_images)}장 최적화 완료")
 
     OLLAMA_URL = "http://host.docker.internal:11434/api/generate"

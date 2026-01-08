@@ -124,21 +124,43 @@ async function processNextJob() {
                 url: job.url,
                 images: cleanImages,
                 prompt: `
-[Role] 채용공고 분석가
-[Task] 이미지 분석 후 JSON 추출.
-1. 모든 텍스트 값은 한국어로 요약/번역.
-2. 없는 값은 null.
-3. tools_and_knowledge 유추 포함.
+[Role] 전문 채용공고 분석가 
+[Task] 이미지 분석 후 구조화된 JSON 추출.
+
+[Strict Rules - 반드시 지킬 것]
+1. **Industry Domain(산업 분야):** 공고 내용을 바탕으로 [IT, 금융, 제조, 서비스, 의료, 교육, 건설, 디자인, 영업] 등 가장 적합한 대분류를 추론하여 적으세요.
+2. **Salary(급여):** '채용 보상금', '입사 축하금' 등 일회성 보상은 연봉이 아닙니다. 연봉/월급 정보가 명시되지 않았다면 "회사 내규에 따라 협의"라고 적으세요.
+3. **Employment Type(고용 형태):** '3~6년' 같은 경력 연수는 고용 형태가 아닙니다. 반드시 [정규직, 계약직, 인턴, 아르바이트, 프리랜서] 중 하나로 분류하세요.
+4. **Tools & Knowledge (Hard Skills):** 해당 직무 수행에 필요한 **소프트웨어, 장비, 자격증, 전문 지식**을 모두 포함하세요. (예: 포토샵, 지게차 운전, 간호사 면허, CAD, 운전면허, JAVA, SPRING BOOT등)
+5. **Language:** 모든 텍스트 값은 한국어로 번역 및 요약하세요.
 
 [Target JSON Schema]
 {
-  "meta": { "url": "${job.url}", "captured_at": "${today}", "industry_domain": "IT" },
-  "timeline": { "deadline_date": "YYYY-MM-DD", "deadline_text": "text" },
-  "job_summary": { "company": "회사명", "title": "공고 제목", "employment_type": "형태" },
+  "meta": { 
+    "url": "${job.url}", 
+    "captured_at": "${today}", 
+    "industry_domain": "공고 내용을 분석하여 분류 (예: IT, 디자인, 영업, 서비스 등)" 
+  },
+  "timeline": { 
+    "deadline_date": "YYYY-MM-DD (날짜가 없으면 null)", 
+    "deadline_text": "원본 텍스트 (예: 채용시 마감)" 
+  },
+  "job_summary": { 
+    "company": "회사명", 
+    "title": "공고 제목", 
+    "employment_type": "고용 형태(Rule 3 참고)" 
+  },
   "analysis": {
-    "key_responsibilities": [], "essential_qualifications": [], "preferred_qualifications": [],
-    "core_competencies": [], "tools_and_knowledge": [],
-    "working_conditions": { "salary": "", "location": { "address": "", "notes": "" }, "schedule": { "work_hours": "", "notes": "" } }
+    "key_responsibilities": ["핵심 업무 요약"], 
+    "essential_qualifications": ["필수 자격 요건"], 
+    "preferred_qualifications": ["우대 사항"],
+    "core_competencies": ["핵심 역량 (Soft Skills: 커뮤니케이션, 리더십, 꼼꼼함 등)"], 
+    "tools_and_knowledge": ["사용 도구 및 기술 (Hard Skills: Python, Excel, CAD, 면허 등)"],
+    "working_conditions": { 
+      "salary": "급여 정보 (Rule 2 참고)", 
+      "location": { "address": "근무지 주소", "notes": "위치 관련 비고" }, 
+      "schedule": { "work_hours": "근무 시간 (복지 혜택 제외)", "notes": "교대근무 여부 등" } 
+    }
   }
 }`
             })
