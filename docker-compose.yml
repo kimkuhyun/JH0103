@@ -70,6 +70,18 @@ services:
       NAVER_CLIENT_ID: ${NAVER_CLIENT_ID}
       NAVER_CLIENT_SECRET: ${NAVER_CLIENT_SECRET}
 
+  collector-service:
+    build: ./ai-engine/collectorAI
+    container_name: career-collector
+    ports:
+      - "5000:5000"
+    volumes:
+      - C:/Users/kimksdsf/Documents/CareerOS:/app/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway" 
+    networks:
+      - app-network
+
   auth-service-test:
     profiles: ["auth-service-test"]
     build:
@@ -90,3 +102,7 @@ services:
 
 volumes:
   db-data:
+
+networks:
+  app-network:
+    driver: bridge

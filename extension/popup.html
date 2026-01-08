@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { width: 360px; padding: 16px; font-family: 'Pretendard', sans-serif; background-color: #F8FAFC; }
+    h2 { margin: 0 0 16px 0; color: #0f172a; font-size: 18px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; }
+    
+    button {
+      width: 100%; padding: 12px; border: none; border-radius: 8px;
+      font-weight: bold; cursor: pointer; font-size: 13px;
+      transition: all 0.2s; margin-bottom: 8px;
+    }
+    
+    #startBtn { background: #0052CC; color: white; }
+    #snapBtn { background: #0f172a; color: white; display: none; }
+    #finishBtn { background: #059669; color: white; display: none; }
+    #resetBtn { background: #ef4444; color: white; display: none; margin-top: 5px;}
+    
+    .badge { background: #e2e8f0; color: #475569; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+
+    /* 작업 목록 스타일 */
+    .divider { height: 1px; background: #e2e8f0; margin: 16px 0; }
+    
+    .list-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    }
+    .list-title { font-size: 12px; font-weight: bold; color:#64748b; }
+    #clearJobsBtn { 
+      background: white; color: #64748b; border: 1px solid #cbd5e1; 
+      padding: 4px 10px; font-size: 11px; width: auto; margin: 0; 
+    }
+    #clearJobsBtn:hover { background: #f1f5f9; color: #ef4444; border-color: #ef4444; }
+
+    .job-item {
+      background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+      padding: 10px; margin-bottom: 8px; 
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 8px; /* 간격 추가 */
+    }
+    
+    .job-info {
+        display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden;
+    }
+
+    .job-title { 
+        font-size: 12px; font-weight: bold; color: #334155; 
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+    }
+
+    .job-actions {
+        display: flex; align-items: center; gap: 6px;
+    }
+
+    .status-badge { font-size: 11px; font-weight: bold; padding: 4px 6px; border-radius: 4px; white-space: nowrap;}
+    .status-pending { background: #fef9c3; color: #854d0e; }
+    .status-processing { background: #dbeafe; color: #1e40af; animation: pulse 1.5s infinite; }
+    .status-completed { background: #dcfce7; color: #166534; }
+    .status-failed { background: #fee2e2; color: #991b1b; }
+
+    /* ✨ 개별 삭제 버튼 스타일 */
+    .btn-delete-job {
+        background: none; border: none; color: #94a3b8; 
+        font-size: 14px; cursor: pointer; padding: 0 4px;
+        margin: 0; width: auto; /* 상단 공통 버튼 스타일 덮어쓰기 */
+    }
+    .btn-delete-job:hover { color: #ef4444; background: none; }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <h2>CareerOS <span id="imgCount" class="badge">대기</span></h2>
+
+  <button id="startBtn">📸 캡처 시작 (Alt+Shift+S)</button>
+  <button id="snapBtn">➕ 화면 추가 (Alt+Shift+C)</button>
+  <button id="finishBtn">🚀 분석 요청 (Alt+Shift+F)</button>
+  <button id="resetBtn">🗑️ 취소</button>
+
+  <div class="divider"></div>
+  
+  <div class="list-header">
+    <span class="list-title">작업 목록</span>
+    <button id="clearJobsBtn">전체 삭제</button>
+  </div>
+
+  <div id="jobList"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
