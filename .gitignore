@@ -10,3 +10,6 @@ build/
 *.ipr
 .vscode/
 *.log
+*.gguf
+ai-engine/models/
+.ollama/
