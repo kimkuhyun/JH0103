@@ -1,9 +1,5 @@
 import { Map, MapMarker, CustomOverlayMap, ZoomControl } from "react-kakao-maps-sdk";
-<<<<<<< HEAD
 import type{ Job } from "../../types/index.ts";
-=======
-import { Job } from "../../types/index.ts";
->>>>>>> ce7f17e29a8efcd32426588b959bd564a16b9a7c
 
 interface Props {
   jobs: Job[];
@@ -12,11 +8,7 @@ interface Props {
   fullScreen?: boolean;
 }
 
-<<<<<<< HEAD
 export function KakaoMapContainer({ jobs = [], selectedJobId, onSelectJob, fullScreen = false }: Props) {
-=======
-export function KakaoMapContainer({ jobs, selectedJobId, onSelectJob, fullScreen = false }: Props) {
->>>>>>> ce7f17e29a8efcd32426588b959bd564a16b9a7c
   const selectedJob = jobs.find(j => j.id === selectedJobId);
   // 선택된 공고가 있으면 거기로 이동, 없으면 서울 중심
   const center = selectedJob 

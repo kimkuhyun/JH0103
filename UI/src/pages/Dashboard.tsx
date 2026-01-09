@@ -1,9 +1,6 @@
 import { useState } from 'react';
-<<<<<<< HEAD
 import type{ Job } from '../types/index.ts';
-=======
 import { Job } from '../types/index.ts';
->>>>>>> ce7f17e29a8efcd32426588b959bd564a16b9a7c
 import { MOCK_JOBS } from '../mockdata/mockData';
 import { KakaoMapContainer } from '../components/map/KakaoMapContainer';
 import { Plus, Filter, Clock, Navigation, MapPin } from 'lucide-react';
