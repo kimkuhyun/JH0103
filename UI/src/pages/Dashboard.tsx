@@ -89,7 +89,7 @@ export function Dashboard() {
             {jobs.map(job => (
               <div 
                 key={job.id} 
-                onClick={() => setSelectedJobId(job.id)}
+                onClick={() => setSelectedJobId(selectedJobId === job.id ? null : job.id)}
                 className={`p-5 rounded-2xl border cursor-pointer transition-all duration-200 group ${
                   selectedJobId === job.id 
                     ? 'bg-white border-teal-500 ring-2 ring-teal-50/50 shadow-md transform scale-[1.02]' 
