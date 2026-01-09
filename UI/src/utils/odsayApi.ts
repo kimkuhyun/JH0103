@@ -5,42 +5,34 @@ const ODSAY_API_KEY = import.meta.env.VITE_ODSAY_API_KEY;
 const ODSAY_BASE_URL = 'https://api.odsay.com/v1/api';
 
 export interface TransitRoute {
-  totalTime: number; // 총 소요 시간 (분)
-  totalDistance: number; // 총 거리 (미터)
-  payment: number; // 요금
-  busTransitCount: number; // 버스 환승 횟수
-  subwayTransitCount: number; // 지하철 환승 횟수
-  pathType: number; // 경로 타입 (1: 지하철, 2: 버스, 3: 버스+지하철)
-  paths: PathSegment[]; // 경로 세부 구간
-  graphData?: GraphPoint[]; // 지도에 표시할 경로 좌표
+  totalTime: number;
+  totalDistance: number;
+  payment: number;
+  busTransitCount: number;
+  subwayTransitCount: number;
+  pathType: number;
+  paths: PathSegment[];
+  graphData?: GraphPoint[];
 }
 
 export interface PathSegment {
-  type: 'walk' | 'bus' | 'subway'; // 이동 수단
-  distance?: number; // 거리 (도보인 경우)
-  sectionTime: number; // 소요 시간
-  stationCount?: number; // 정거장 수
+  type: 'walk' | 'bus' | 'subway';
+  distance?: number;
+  sectionTime: number;
+  stationCount?: number;
   lane?: {
-    name: string; // 노선명
-    type: number; // 노선 타입
-    startName: string; // 출발역/정류장
-    endName: string; // 도착역/정류장
+    name: string;
+    type: number;
+    startName: string;
+    endName: string;
   };
 }
 
 export interface GraphPoint {
-  x: number; // 경도
-  y: number; // 위도
+  x: number;
+  y: number;
 }
 
-/**
- * ODsay API를 사용하여 대중교통 경로를 검색합니다.
- * @param startLat 출발지 위도
- * @param startLng 출발지 경도
- * @param endLat 도착지 위도
- * @param endLng 도착지 경도
- * @returns 경로 정보 배열 (최대 3개 경로)
- */
 export async function searchTransitRoute(
   startLat: number,
   startLng: number,
@@ -58,13 +50,11 @@ export async function searchTransitRoute(
     const response = await fetch(url);
     const data = await response.json();
 
-    // 응답 구조 디버깅
     console.log('ODsay API Response:', data);
 
-    // 에러 체크 - 여러 가능한 에러 형식 처리
-    if (!response.ok || data.error || (data.result && data.result.error)) {
-      const errorMsg = data.error?.msg || data.result?.error?.msg || data.message || `HTTP ${response.status}`;
-      console.error('ODsay API 오류:', errorMsg);
+    // 에러 체크
+    if (data.error) {
+      console.error('ODsay API 오류:', data.error.msg || data.error);
       return [];
     }
 
@@ -74,7 +64,6 @@ export async function searchTransitRoute(
       return [];
     }
 
-    // 경로 데이터 파싱
     return data.result.path.map((path: any) => {
       const route: TransitRoute = {
         totalTime: path.info?.totalTime || 0,
@@ -86,7 +75,6 @@ export async function searchTransitRoute(
         paths: [],
       };
 
-      // 세부 구간 파싱
       if (path.subPath && Array.isArray(path.subPath)) {
         route.paths = path.subPath.map((sub: any) => {
           const segment: PathSegment = {
@@ -110,7 +98,6 @@ export async function searchTransitRoute(
         });
       }
 
-      // 지도 표시용 좌표 데이터
       if (path.info?.mapObj) {
         route.graphData = parseGraphData(path.info.mapObj);
       }
@@ -123,9 +110,6 @@ export async function searchTransitRoute(
   }
 }
 
-/**
- * ODsay의 mapObj 문자열을 파싱하여 좌표 배열로 변환
- */
 function parseGraphData(mapObj: string): GraphPoint[] {
   try {
     const points: GraphPoint[] = [];
@@ -148,9 +132,6 @@ function parseGraphData(mapObj: string): GraphPoint[] {
   }
 }
 
-/**
- * 경로 정보를 한글 문자열로 포맷팅
- */
 export function formatRouteInfo(route: TransitRoute): string {
   const hours = Math.floor(route.totalTime / 60);
   const minutes = route.totalTime % 60;
@@ -164,9 +145,6 @@ export function formatRouteInfo(route: TransitRoute): string {
   return `${timeStr} · ${transitStr} · ${paymentStr}`;
 }
 
-/**
- * 경로 타입에 따른 아이콘 이름 반환
- */
 export function getRouteTypeIcon(pathType: number): string {
   switch (pathType) {
     case 1:
