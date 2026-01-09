@@ -72,3 +72,26 @@ export function KakaoMapContainer({ jobs, selectedJobId, onSelectJob, fullScreen
     </div>
   );
 }
+
+export const getCoordsFromAddress = (address: string): Promise<{lat: number, lng: number}> => {
+  return new Promise((resolve, reject) => {
+    // Kakao Maps SDK가 로드되었는지 확인
+    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+      reject(new Error("Kakao Maps API is not loaded"));
+      return;
+    }
+
+    const geocoder = new window.kakao.maps.services.Geocoder();
+
+    geocoder.addressSearch(address, (result: any, status: any) => {
+      if (status === window.kakao.maps.services.Status.OK) {
+        resolve({
+          lat: parseFloat(result[0].y),
+          lng: parseFloat(result[0].x),
+        });
+      } else {
+        reject(new Error("Address search failed"));
+      }
+    });
+  });
+};

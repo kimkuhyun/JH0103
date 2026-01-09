@@ -11,4 +11,15 @@ export interface Job{
   tags: string[];
   lat: number;
   lng: number;
+  detail?: JobDetail;
+}
+
+export interface JobDetail {
+  responsibilities: string[];
+  qualifications: string[];
+  preferred: string[];
+  techStack: string[];
+  salary: string;
+  originalUrl: string;
+  workHours: string;
 }
