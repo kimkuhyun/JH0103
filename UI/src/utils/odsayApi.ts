@@ -1,6 +1,4 @@
 // src/utils/odsayApi.ts
-// ODsay API를 사용한 대중교통 경로 검색 유틸리티
-
 const ODSAY_API_KEY = import.meta.env.VITE_ODSAY_API_KEY;
 const ODSAY_BASE_URL = 'https://api.odsay.com/v1/api';
 
@@ -45,20 +43,20 @@ export async function searchTransitRoute(
   }
 
   try {
-    const url = `${ODSAY_BASE_URL}/searchPubTransPath?SX=${startLng}&SY=${startLat}&EX=${endLng}&EY=${endLat}&apiKey=${ODSAY_API_KEY}`;
+    // API 키를 URL 인코딩
+    const encodedApiKey = encodeURIComponent(ODSAY_API_KEY);
+    const url = `${ODSAY_BASE_URL}/searchPubTransPath?SX=${startLng}&SY=${startLat}&EX=${endLng}&EY=${endLat}&apiKey=${encodedApiKey}`;
     
     const response = await fetch(url);
     const data = await response.json();
 
     console.log('ODsay API Response:', data);
 
-    // 에러 체크
     if (data.error) {
-      console.error('ODsay API 오류:', data.error.msg || data.error);
+      console.error('ODsay API 오류:', data.error);
       return [];
     }
 
-    // 결과가 없는 경우
     if (!data.result || !data.result.path || data.result.path.length === 0) {
       console.warn('경로를 찾을 수 없습니다.');
       return [];
