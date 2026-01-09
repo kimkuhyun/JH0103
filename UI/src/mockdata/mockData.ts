@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import type{ Job } from '../types/index.ts';
-=======
-import { Job } from '../types/index.ts';
->>>>>>> ce7f17e29a8efcd32426588b959bd564a16b9a7c
 
 export const MOCK_JOBS: Job[] = [
   {
