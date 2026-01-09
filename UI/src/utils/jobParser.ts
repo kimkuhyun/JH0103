@@ -12,16 +12,17 @@ interface UploadedJson {
     essential_qualifications: string[];
     preferred_qualifications: string[];
     tools_and_knowledge: string[];
+    working_conditions: {
+      salary: string;
+      location: { address: string };
+      schedule: { work_houres: string };
+      };
   };
-  working_conditions: {
-    salary: string;
-    location: { address: string };
-    schedule: { work_houres: string };
-  };
+  
 }
 
 export const parseJsonToJob = async (json: Partial<UploadedJson>): Promise<Job> => {
-  const location = json.working_conditions?.location?.address ?? "미지정";
+  const location = json.analysis?.working_conditions?.location?.address ?? "미지정";
   let lat = 37.5665; // 기본값 (서울 시청)
   let lng = 126.9780;
 
