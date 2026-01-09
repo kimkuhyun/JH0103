@@ -48,62 +48,62 @@ export async function searchTransitRoute(
   endLng: number
 ): Promise<TransitRoute[]> {
   if (!ODSAY_API_KEY) {
-    throw new Error('ODsay API 키가 설정되지 않았습니다. .env 파일을 확인해주세요.');
+    console.warn('ODsay API 키가 설정되지 않았습니다.');
+    return [];
   }
 
   try {
     const url = `${ODSAY_BASE_URL}/searchPubTransPath?SX=${startLng}&SY=${startLat}&EX=${endLng}&EY=${endLat}&apiKey=${ODSAY_API_KEY}`;
     
     const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`ODsay API 오류: ${response.status}`);
-    }
-
     const data = await response.json();
 
-    if (data.error) {
-      throw new Error(`ODsay API 오류: ${data.error.message}`);
-    }
+    // 응답 구조 디버깅
+    console.log('ODsay API Response:', data);
 
-    // 도시내 경로 결과 파싱
-    if (!data.result || !data.result.path) {
+    // 에러 체크 - 여러 가능한 에러 형식 처리
+    if (!response.ok || data.error || (data.result && data.result.error)) {
+      const errorMsg = data.error?.msg || data.result?.error?.msg || data.message || `HTTP ${response.status}`;
+      console.error('ODsay API 오류:', errorMsg);
       return [];
     }
 
+    // 결과가 없는 경우
+    if (!data.result || !data.result.path || data.result.path.length === 0) {
+      console.warn('경로를 찾을 수 없습니다.');
+      return [];
+    }
+
+    // 경로 데이터 파싱
     return data.result.path.map((path: any) => {
       const route: TransitRoute = {
-        totalTime: path.info.totalTime,
-        totalDistance: path.info.totalDistance,
-        payment: path.info.payment,
-        busTransitCount: path.info.busTransitCount,
-        subwayTransitCount: path.info.subwayTransitCount,
-        pathType: path.info.pathType,
+        totalTime: path.info?.totalTime || 0,
+        totalDistance: path.info?.totalDistance || 0,
+        payment: path.info?.payment || 0,
+        busTransitCount: path.info?.busTransitCount || 0,
+        subwayTransitCount: path.info?.subwayTransitCount || 0,
+        pathType: path.info?.pathType || 3,
         paths: [],
       };
 
       // 세부 구간 파싱
-      if (path.subPath) {
+      if (path.subPath && Array.isArray(path.subPath)) {
         route.paths = path.subPath.map((sub: any) => {
           const segment: PathSegment = {
             type: sub.trafficType === 1 ? 'subway' : sub.trafficType === 2 ? 'bus' : 'walk',
-            sectionTime: sub.sectionTime,
+            sectionTime: sub.sectionTime || 0,
           };
 
           if (sub.trafficType === 3) {
-            // 도보
             segment.distance = sub.distance;
-          } else {
-            // 대중교통
+          } else if (sub.lane && sub.lane[0]) {
             segment.stationCount = sub.stationCount;
-            if (sub.lane) {
-              segment.lane = {
-                name: sub.lane[0].name,
-                type: sub.lane[0].type,
-                startName: sub.startName,
-                endName: sub.endName,
-              };
-            }
+            segment.lane = {
+              name: sub.lane[0].name || '',
+              type: sub.lane[0].type || 0,
+              startName: sub.startName || '',
+              endName: sub.endName || '',
+            };
           }
 
           return segment;
@@ -111,7 +111,7 @@ export async function searchTransitRoute(
       }
 
       // 지도 표시용 좌표 데이터
-      if (path.info.mapObj) {
+      if (path.info?.mapObj) {
         route.graphData = parseGraphData(path.info.mapObj);
       }
 
@@ -119,7 +119,7 @@ export async function searchTransitRoute(
     });
   } catch (error) {
     console.error('대중교통 경로 검색 오류:', error);
-    throw error;
+    return [];
   }
 }
 
@@ -128,9 +128,8 @@ export async function searchTransitRoute(
  */
 function parseGraphData(mapObj: string): GraphPoint[] {
   try {
-    // mapObj 형식: "0:0@127.1,37.5:1@127.2,37.6:2@..."
     const points: GraphPoint[] = [];
-    const segments = mapObj.split(':').slice(1); // 첫 번째 "0:0" 제거
+    const segments = mapObj.split(':').slice(1);
 
     segments.forEach(segment => {
       const coords = segment.split('@')[1];
