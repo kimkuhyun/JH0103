@@ -1,5 +1,6 @@
-import { Map, MapMarker, CustomOverlayMap, ZoomControl } from "react-kakao-maps-sdk";
+import { Map, MapMarker, CustomOverlayMap, ZoomControl, useKakaoLoader } from "react-kakao-maps-sdk";
 import type{ Job } from "../../types/index.ts";
+import { Loader2 } from "lucide-react"; 
 
 interface Props {
   jobs: Job[];
@@ -8,19 +9,42 @@ interface Props {
   fullScreen?: boolean;
 }
 
-export function KakaoMapContainer({ jobs = [], selectedJobId, onSelectJob, fullScreen = false }: Props) {
+export function KakaoMapContainer({ jobs, selectedJobId, onSelectJob, fullScreen = false }: Props) {
+  // [핵심] useKakaoLoader를 사용하여 스크립트를 안전하게 로드합니다.
+  const [loading, error] = useKakaoLoader({
+    appkey: import.meta.env.VITE_KAKAO_MAP_API_KEY as string, 
+    libraries: ["services", "clusterer"],
+  });
+
   const selectedJob = jobs.find(j => j.id === selectedJobId);
-  // 선택된 공고가 있으면 거기로 이동, 없으면 서울 중심
+  // 초기 중심 좌표 설정
   const center = selectedJob 
     ? { lat: selectedJob.lat, lng: selectedJob.lng } 
     : { lat: 37.5665, lng: 126.9780 };
 
+  // 1. 로딩 중일 때 표시할 화면
+  if (loading) return (
+    <div className={`w-full h-full flex items-center justify-center bg-slate-100 ${!fullScreen && 'rounded-2xl'}`}>
+      <div className="flex flex-col items-center gap-2 text-slate-400">
+        <Loader2 className="animate-spin" />
+        <span className="text-xs">지도 불러오는 중...</span>
+      </div>
+    </div>
+  );
+
+  // 2. 에러 발생 시 표시할 화면
+  if (error) return (
+    <div className="w-full h-full flex items-center justify-center bg-slate-100 text-red-500 text-sm">
+      지도를 불러오는데 실패했습니다. API 키를 확인해주세요.
+    </div>
+  );
+
+  // 3. 로딩 완료 후 지도 렌더링
   return (
     <div className={`w-full h-full relative ${!fullScreen && 'rounded-2xl overflow-hidden shadow-inner'}`}>
       <Map center={center} style={{ width: "100%", height: "100%" }} level={selectedJob ? 4 : 8}>
         <ZoomControl position={"RIGHT"} />
         
-        {/* 마커 렌더링 */}
         {jobs.map(job => (
           <div key={job.id}>
             <MapMarker
@@ -33,7 +57,6 @@ export function KakaoMapContainer({ jobs = [], selectedJobId, onSelectJob, fullS
                 size: { width: 24, height: 35 }
               }}
             />
-            {/* 선택 시 네비게이션 스타일 말풍선 */}
             {selectedJobId === job.id && (
               <CustomOverlayMap position={{ lat: job.lat, lng: job.lng }} yAnchor={1}>
                 <div className="relative bottom-10 bg-white p-3 rounded-xl shadow-xl border-2 border-teal-600 animate-bounce z-50">
