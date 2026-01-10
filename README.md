@@ -74,19 +74,30 @@ React 기반의 웹 애플리케이션 소스 코드입니다. 경로: `UI/`
 * **requirements.txt**: Python 의존성 패키지 목록 (Flask, Pillow, Requests 등).
 * **server.py**: 메인 서버 스크립트.
     * `resize_image()`: 분석 전 이미지 최적화 및 리사이징.
-    * `analyze()`: POST 요청을 받아 로컬 LLM(Ollama)에 분석을 요청하고 결과를 JSON 파일로 저장.
+    * `extract_metadata_text()`: Extension에서 전달받은 메타데이터를 텍스트로 변환.
+    * `analyze()`: POST 요청을 받아 로컬 LLM(Ollama)에 분석을 요청하고 결과를 JSON 파일로 저장. 메타데이터와 이미지를 함께 처리.
 
 ### 2.4 Extension (Web Clipper)
-웹 브라우저에서 채용 공고를 캡처하는 크롬 확장프로그램입니다. 경로: `extension/`
+웹 브라우저에서 채용 공고를 원클릭으로 캡처하는 크롬 확장프로그램입니다. 경로: `extension/`
 
-* **manifest.json**: 확장프로그램 권한(Storage, ActiveTab 등) 및 메타데이터 정의.
-* **popup.html**: 확장프로그램 팝업 UI의 HTML 구조.
-* **popup.js**: 팝업 UI 인터랙션 처리.
-    * 작업 목록 렌더링 및 개별 삭제(`deleteJob`) 기능.
-    * 캡처 시작/종료 버튼 이벤트 핸들링.
+* **manifest.json**: 확장프로그램 권한 및 메타데이터 정의. v3.0에서 원클릭 캡처 기능 추가.
+* **popup.html**: 확장프로그램 팝업 UI의 HTML 구조. 간소화된 원클릭 인터페이스.
+* **popup.js**: 팝업 UI 인터랙션 처리. 캡처 버튼 클릭 시 백그라운드 스크립트로 메시지 전송.
 * **background.js**: 브라우저 백그라운드 서비스 워커.
-    * `takeSnapshot()`: 현재 탭 화면 캡처.
-    * `processNextJob()`: 대기 중인 캡처 작업을 Python 분석 서버로 전송 및 상태 관리.
+    * `startOneClickCapture()`: 단축키(Alt+Shift+S) 또는 버튼 클릭 시 실행되는 메인 캡처 함수.
+    * `captureFullPage()`: 스크롤하며 전체 페이지를 여러 장의 스크린샷으로 캡처.
+    * `sendToServer()`: 캡처된 이미지와 메타데이터를 Python 분석 서버로 전송.
+* **content.js**: 웹 페이지에 주입되는 콘텐츠 스크립트.
+    * `ToastNotification`: 토스트 알림 클래스. 캡처/분석 진행 상황을 사용자에게 표시.
+    * `SITE_CONFIGS`: 채용 사이트별 DOM 선택자 설정 (Wanted, JobKorea, Saramin 등).
+    * `hideUnnecessaryElements()`: 관련 공고, 광고 등 불필요한 요소를 숨겨 깔끔한 캡처 지원.
+    * `extractMetadata()`: 회사명, 공고 제목, 급여, 근무지 등 메타데이터를 DOM에서 추출.
+* **toast.css**: 토스트 알림 스타일 정의.
+
+#### 사용 방법
+1. 채용 공고 페이지 접속
+2. `Alt+Shift+S` 단축키 또는 확장프로그램 아이콘 클릭
+3. 자동으로 캡처 -> AI 분석 -> 완료 토스트 표시
 
 ### 2.5 Services (Auth Backend)
 사용자 인증 및 세션 관리를 담당하는 Spring Boot 애플리케이션입니다. 경로: `services/auth-service/`
@@ -120,24 +131,27 @@ React 기반의 웹 애플리케이션 소스 코드입니다. 경로: `UI/`
 ## 3. 아키텍처 및 로드맵
 
 ### 3.1 현재 아키텍처 (Current Status)
-* **Client**: React SPA + Chrome Extension (이미지 캡처 방식).
+* **Client**: React SPA + Chrome Extension (원클릭 스크롤 캡처 + 메타데이터 추출 방식).
 * **Backend**:
     * Auth Service: Java Spring Boot (사용자 인증).
-    * AI Engine: Python Flask (로컬 LLM 연동, JSON 파일 저장 방식).
+    * AI Engine: Python Flask (로컬 LLM 연동, 이미지+메타데이터 분석, JSON 파일 저장).
 * **Data**: PostgreSQL (사용자 정보), 로컬 파일 시스템 (공고 데이터).
 
-### 3.2 로드맵 및 변경 예정 사항 (Planned Changes)
+### 3.2 데이터 수집 플로우 (One-Click Capture)
+1. 사용자가 채용 공고 페이지에서 `Alt+Shift+S` 단축키 또는 확장 아이콘 클릭
+2. Content Script가 불필요한 요소(관련 공고, 광고 등)를 숨기고 메타데이터 추출
+3. Background Script가 스크롤하며 전체 페이지 캡처 (최대 5장)
+4. 토스트 알림으로 진행 상황 표시 (캡처됨 -> AI 분석중 -> 완료)
+5. Python 서버가 이미지 + 메타데이터를 받아 LLM 분석 후 JSON 저장
 
-#### 3.2.1 데이터 수집 고도화 (One-Click Parsing)
-* **변경 계획**: Chrome Extension의 캡처 방식을 '이미지 다중 캡처'에서 **'DOM(HTML) 추출 + 단일 Viewport 스크린샷'** 방식으로 변경 고려 중.
-* **목적**: 봇 차단 우회, 처리 속도 향상, 토큰 비용 절감 및 사용자 편의성(원클릭) 증대.
+### 3.3 로드맵 및 변경 예정 사항 (Planned Changes)
 
-#### 3.2.2 시스템 아키텍처 통합 (BFF & DB Centralization)
+#### 3.3.1 시스템 아키텍처 통합 (BFF & DB Centralization)
 * **변경 계획**:
     1.  **API Gateway 도입**: 클라이언트와 서버 간의 통신을 일원화하여 보안 및 라우팅 효율화.
     2.  **데이터베이스 통합**: Python 서버의 파일 시스템 저장을 PostgreSQL 저장으로 변경하여 데이터 무결성 확보 및 이력서 생성 서비스와의 연동 준비.
     3.  **서비스 모듈화**: 채용공고 수집(Collector), 이력서 생성(Resume), 에이전트(Agent) 기능의 마이크로서비스 또는 모듈형 모놀리스 구조 확립.
 
-#### 3.2.3 기능 확장 (Feature Expansion)
+#### 3.3.2 기능 확장 (Feature Expansion)
 * **Resume AI**: 사용자 경험(Experience) 데이터를 벡터 DB에 저장하고, RAG(검색 증강 생성)를 활용하여 공고 맞춤형 자소서 생성 기능 개발 예정.
 * **Private Knowledge Management**: 로컬 우선(Local-First) 데이터 동기화 기술을 적용한 블록형 에디터 및 개인 자료 관리 시스템 구축 예정.
