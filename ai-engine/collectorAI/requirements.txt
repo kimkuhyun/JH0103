@@ -3,4 +3,5 @@ flask-cors
 requests
 Pillow
 PyMuPDF
-pyppeteer
+selenium
+webdriver-manager
