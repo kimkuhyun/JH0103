@@ -32,36 +32,26 @@ async function startOneClickCapture() {
     const tabId = tab.id;
     
     try {
-        await showToast(tabId, '캡처 시작', 'capture');
+        await showToast(tabId, '분석 시작', 'capture');
         
         const prepareResult = await chrome.tabs.sendMessage(tabId, { 
             action: 'PREPARE_CAPTURE' 
         });
         
         if (!prepareResult.success) {
-            throw new Error('페이지 준비 실패');
+            throw new Error('준비 실패');
         }
         
         const { metadata } = prepareResult;
         
-        await showToast(tabId, 'PDF 생성 중...', 'capture');
-        
-        // PDF 생성
-        const pdfData = await capturePDF(tabId);
-        
-        if (!pdfData) {
-            throw new Error('PDF 생성 실패');
-        }
-        
-        await showToast(tabId, 'AI 분석 중, 다른 탭으로 이동 가능', 'analyzing');
+        await showToast(tabId, '서버에서 PDF 생성 중, 다른 탭으로 이동 가능', 'analyzing');
         
         const job = {
             id: Date.now(),
             title: tab.title.substring(0, 30),
             url: tab.url,
             status: 'PROCESSING',
-            metadata: metadata,
-            pdf: pdfData
+            metadata: metadata
         };
         
         await saveJob(job);
@@ -69,49 +59,18 @@ async function startOneClickCapture() {
         const result = await submitAndPoll(job);
         
         if (result.success) {
-            await showToast(tabId, '분석 완료', 'complete');
+            await showToast(tabId, '완료', 'complete');
             await updateJobStatus(job.id, 'COMPLETED');
         } else {
-            throw new Error(result.message || '분석 실패');
+            throw new Error(result.message || '실패');
         }
         
         setTimeout(() => hideToast(tabId), 3000);
         
     } catch (error) {
-        console.error('캡처 오류:', error);
+        console.error('오류:', error);
         await showToast(tabId, `오류: ${error.message}`, 'error');
         setTimeout(() => hideToast(tabId), 3000);
-    }
-}
-
-async function capturePDF(tabId) {
-    try {
-        // Chrome의 PDF 생성 API 사용
-        const pdfBlob = await chrome.tabs.printToPDF(tabId, {
-            paperFormat: 'A4',
-            marginTop: 0,
-            marginBottom: 0,
-            marginLeft: 0,
-            marginRight: 0,
-            printBackground: true,
-            preferCSSPageSize: false
-        });
-        
-        // Blob을 base64로 변환
-        const reader = new FileReader();
-        return new Promise((resolve, reject) => {
-            reader.onloadend = () => {
-                const base64 = reader.result.split(',')[1];
-                console.log(`PDF 생성 완료: ${Math.round(pdfBlob.size / 1024)}KB`);
-                resolve(base64);
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(new Blob([pdfBlob], { type: 'application/pdf' }));
-        });
-        
-    } catch (error) {
-        console.error('PDF 생성 실패:', error);
-        return null;
     }
 }
 
@@ -122,7 +81,6 @@ async function submitAndPoll(job) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 url: job.url,
-                pdf: job.pdf,  // images 대신 pdf
                 metadata: job.metadata
             })
         });
@@ -134,7 +92,7 @@ async function submitAndPoll(job) {
         
         const { job_id } = await submitResponse.json();
         
-        const maxAttempts = 60;
+        const maxAttempts = 90;  // 3분
         let attempts = 0;
         
         while (attempts < maxAttempts) {
@@ -162,7 +120,7 @@ async function submitAndPoll(job) {
             attempts++;
         }
         
-        return { success: false, message: '타임아웃 (2분 초과)' };
+        return { success: false, message: '타임아웃 (3분 초과)' };
         
     } catch (error) {
         return { success: false, message: error.message };
@@ -184,9 +142,7 @@ async function showToast(tabId, message, type) {
 async function hideToast(tabId) {
     try {
         await chrome.tabs.sendMessage(tabId, { action: 'HIDE_TOAST' });
-    } catch (e) {
-        console.log('토스트 숨김 오류:', e);
-    }
+    } catch (e) {}
 }
 
 function sleep(ms) {
