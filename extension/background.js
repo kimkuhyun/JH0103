@@ -35,8 +35,8 @@ async function startOneClickCapture() {
     const tabId = tab.id;
     
     try {
-        // 1. 토스트 표시 및 페이지 준비
-        await showToast(tabId, '캡처되었습니다', 'capture');
+        // 1. 토스트 표시 (주의사항 포함)
+        await showToast(tabId, '캡처 시작! 완료될 때까지 이 탭에서 대기해주세요', 'capture');
         
         // Content script에 준비 요청
         const prepareResult = await chrome.tabs.sendMessage(tabId, { 
@@ -50,11 +50,11 @@ async function startOneClickCapture() {
         const { metadata, pageInfo } = prepareResult;
         
         // 2. 스크린샷 캡처 (스크롤 캡처)
-        await showToast(tabId, '페이지 캡처중...', 'capture');
+        await showToast(tabId, '페이지 캡처중... 탭을 유지해주세요', 'capture');
         const images = await captureFullPage(tabId, pageInfo);
         
-        // 3. AI 분석 시작
-        await showToast(tabId, 'AI가 분석중...', 'analyzing');
+        // 3. AI 분석 시작 (이제 탭 이동 가능)
+        await showToast(tabId, 'AI 분석중... 이제 다른 작업 가능합니다', 'analyzing');
         
         // 작업 생성
         const job = {
@@ -152,47 +152,91 @@ async function sendToServer(job) {
     }
     
     const prompt = `
-[Role] 전문 채용공고 분석가 
-[Task] 이미지 분석 후 구조화된 JSON 추출.
+[Role] 전문 채용공고 분석가
+[Task] 이미지에서 채용공고 정보를 빠짐없이 추출하여 JSON으로 구조화
 
 ${metadataHint ? `[참고 메타데이터]\n${metadataHint}\n` : ''}
 
-[Strict Rules - 반드시 지킬 것]
-1. **Industry Domain(산업 분야):** 공고 내용을 바탕으로 [IT, 금융, 제조, 서비스, 의료, 교육, 건설, 디자인, 영업] 등 가장 적합한 대분류를 추론하여 적으세요.
-2. **Salary(급여):** '채용 보상금', '입사 축하금' 등 일회성 보상은 연봉이 아닙니다. 연봉/월급 정보가 명시되지 않았다면 "회사 내규에 따라 협의"라고 적으세요.
-3. **Employment Type(고용 형태):** '3~6년' 같은 경력 연수는 고용 형태가 아닙니다. 반드시 [정규직, 계약직, 인턴, 아르바이트, 프리랜서] 중 하나로 분류하세요.
-4. **Tools & Knowledge (Hard Skills):** 해당 직무 수행에 필요한 **소프트웨어, 장비, 자격증, 전문 지식**을 모두 포함하세요.
-5. **Language:** 모든 텍스트 값은 한국어로 번역 및 요약하세요.
+[Critical Rules - 반드시 준수]
 
-[Target JSON Schema]
+1. **산업 분류 (industry_domain)**
+   - 회사의 실제 사업 분야로 분류 (공고 직무가 아님)
+   - 예: 가구 철물 회사의 영업직 → "제조/가구", IT회사 경리 → "IT"
+   - 분류: IT/소프트웨어, 금융, 제조, 유통/물류, 서비스, 의료/제약, 교육, 건설, 디자인, 미디어/광고
+
+2. **마감일 (deadline)**
+   - deadline_date: 반드시 YYYY-MM-DD 형식 (예: 2026-01-21)
+   - 이미지에서 "마감일", "접수기간", "~까지" 등을 찾아 정확한 날짜 추출
+   - 날짜가 없으면 null
+
+3. **급여 (salary)**
+   - "채용 보상금", "입사 축하금", "추천 보상금"은 급여가 아님 - 제외
+   - 연봉/월급 정보만 기재, 없으면 "회사 내규에 따름"
+
+4. **근무지 주소 (location.address)**
+   - 우편번호 제외 (06105 같은 숫자 제외)
+   - 도로명 주소만 기재 (예: "서울 강남구 연주로129길 13")
+   - 지하철역 정보는 notes에 기재
+
+5. **복리후생 (benefits)** - 반드시 포함
+   - 이미지에서 "복리후생", "혜택", "지원" 섹션 찾아서 모두 추출
+   - 예: 유연근무제, 재택근무, 식대, 복지카드, 건강검진, 자녀학자금, 경조휴가 등
+
+6. **전형절차 (hiring_process)**
+   - 서류전형 → 면접 → 최종합격 등 단계별로 배열
+
+7. **주요업무 (key_responsibilities)**
+   - 구체적으로 작성 (예: "영업지원 업무 전반", "수/발주 업무", "세금계산서 관리")
+
+8. **자격요건과 우대사항 구분**
+   - essential_qualifications: 필수 조건만
+   - preferred_qualifications: 우대 사항만 (SAP 경험, 관련 자격증 등)
+
+9. **수습기간**
+   - probation_period 필드에 기재 (예: "3개월")
+
+[Output JSON Schema]
 {
-  "meta": { 
-    "url": "${job.url}", 
-    "captured_at": "${today}", 
-    "industry_domain": "공고 내용을 분석하여 분류" 
+  "meta": {
+    "url": "${job.url}",
+    "captured_at": "${today}",
+    "industry_domain": "회사의 실제 산업 분야"
   },
-  "timeline": { 
-    "deadline_date": "YYYY-MM-DD (날짜가 없으면 null)", 
-    "deadline_text": "원본 텍스트" 
+  "timeline": {
+    "deadline_date": "YYYY-MM-DD 또는 null",
+    "deadline_text": "마감일 원본 텍스트"
   },
-  "job_summary": { 
-    "company": "회사명", 
-    "title": "공고 제목", 
-    "employment_type": "고용 형태" 
+  "job_summary": {
+    "company": "회사명 (주식회사, ㈜ 등 포함)",
+    "title": "공고 제목",
+    "employment_type": "정규직/계약직/인턴/아르바이트/프리랜서",
+    "probation_period": "수습기간 (없으면 null)",
+    "experience_required": "경력 요구사항 (예: 2년 이상, 신입)"
   },
   "analysis": {
-    "key_responsibilities": ["핵심 업무 요약"], 
-    "essential_qualifications": ["필수 자격 요건"], 
+    "key_responsibilities": ["구체적인 업무 내용 1", "업무 2", "업무 3"],
+    "essential_qualifications": ["필수 자격요건"],
     "preferred_qualifications": ["우대 사항"],
-    "core_competencies": ["핵심 역량 (Soft Skills)"], 
-    "tools_and_knowledge": ["사용 도구 및 기술 (Hard Skills)"],
-    "working_conditions": { 
-      "salary": "급여 정보", 
-      "location": { "address": "근무지 주소", "notes": "위치 관련 비고" }, 
-      "schedule": { "work_hours": "근무 시간", "notes": "교대근무 여부 등" } 
-    }
+    "core_competencies": ["필요 역량 (Soft Skills)"],
+    "tools_and_knowledge": ["필요 기술/도구 (Hard Skills)"],
+    "hiring_process": ["서류전형", "1차면접", "2차면접", "최종합격"],
+    "working_conditions": {
+      "salary": "급여 정보 (보상금 제외)",
+      "location": {
+        "address": "도로명 주소 (우편번호 제외)",
+        "notes": "교통편, 추가 위치 정보"
+      },
+      "schedule": {
+        "work_hours": "근무 시간",
+        "work_days": "근무 요일",
+        "notes": "유연근무제, 교대근무 여부 등"
+      }
+    },
+    "benefits": ["복리후생 항목 1", "항목 2", "항목 3"]
   }
-}`;
+}
+
+[Important] 이미지에 있는 모든 정보를 빠짐없이 추출하세요. 특히 복리후생, 전형절차, 마감일을 놓치지 마세요.`;
 
     try {
         const response = await fetch(API_ENDPOINT, {
