@@ -108,9 +108,13 @@ const SITE_CONFIGS = {
         jobContainer: '.content, .job_cont, article, main',
         printButton: '.btn_print, a[href*="print"]',
         endMarkers: [
-            '.btn_apply',
-            '.jv_link_wrap',
-            '.related_jobs'
+            '.btn_apply',              // 지원 버튼
+            '.jv_cont',                // 채용정보 본문 끝
+            '.jv_summary',             // 요약 정보 끝
+            '.content_bottom',         // 컨텐츠 하단
+            '.related_jobs',           // 추천공고 시작
+            '[class*="HOT100"]',       // HOT100 섹션
+            '[class*="직업전체"]'      // 직업전체 섹션
         ],
         hideSelectors: [
             '.related_jobs',
@@ -119,8 +123,8 @@ const SITE_CONFIGS = {
             '.footer',
             '.jv_link_wrap',          
             '.content_bottom',        
-            '[class*=\"HOT100\"]',      
-            '[class*=\"직업전체\"]',     
+            '[class*="HOT100"]',      
+            '[class*="직업전체"]',     
             '.job_list_wrap',         
             '#recomm_job_list' 
         ],
@@ -226,13 +230,13 @@ function findJobBoundaries() {
         containerHeight = endY - containerTop;
         console.log('[CareerOS] 끝 마커 발견:', endElement?.className);
     } else {
-        // 끝 마커 없으면 전체 컨테이너 사용 (100%)
-        containerHeight = container.scrollHeight;
-        console.log('[CareerOS] 끝 마커 없음, 전체 컨테이너 사용');
+        // 끝 마커 없으면 최대 5화면으로 제한
+        containerHeight = Math.min(container.scrollHeight, window.innerHeight * 5);
+        console.log('[CareerOS] 끝 마커 없음, 5화면으로 제한');
     }
     
-    // 제한: 최소 1화면, 최대 10화면
-    containerHeight = Math.min(containerHeight, window.innerHeight * 10);
+    // 제한: 최소 1화면, 최대 5화면
+    containerHeight = Math.min(containerHeight, window.innerHeight * 5);
     containerHeight = Math.max(containerHeight, window.innerHeight);
     
     return {
@@ -327,7 +331,7 @@ function getJobContainerInfo() {
     const viewportHeight = window.innerHeight;
     
     const captureCount = Math.ceil(containerHeight / viewportHeight);
-    const limitedCount = Math.min(captureCount, 10); // 10장으로 증가
+    const limitedCount = Math.min(captureCount, 3); // 10 → 3으로 축소
     
     console.log(`[CareerOS] 캡처 계획: ${limitedCount}개 화면 (${Math.round(containerHeight)}px)`);
     
