@@ -29,8 +29,8 @@ class ToastNotification {
         const icons = {
             'capture': '...',
             'analyzing': '...',
-            'complete': 'OK',
-            'error': 'ERR',
+            'complete': '완료',
+            'error': '오류',
             'info': 'i'
         };
         iconEl.textContent = icons[type] || icons.info;
@@ -204,7 +204,7 @@ function findJobBoundaries() {
                 }
             }
         } catch (e) {
-            console.log('End marker search error:', selector);
+            console.log('끝 마커 검색 오류:', selector);
         }
     }
     
@@ -214,13 +214,13 @@ function findJobBoundaries() {
     let containerHeight;
     if (endY && endY > containerTop) {
         containerHeight = endY - containerTop;
-        console.log('[CareerOS] End marker found:', endElement?.className);
+        console.log('[CareerOS] 끝 마커 발견:', endElement?.className);
     } else {
         containerHeight = container.scrollHeight * 0.7;
-        console.log('[CareerOS] No end marker, using 70% of container');
+        console.log('[CareerOS] 끝 마커 없음, 컨테이너의 70% 사용');
     }
     
-    // Limits: min 1 screen, max 5 screens
+    // 제한: 최소 1화면, 최대 5화면
     containerHeight = Math.min(containerHeight, window.innerHeight * 5);
     containerHeight = Math.max(containerHeight, window.innerHeight);
     
@@ -247,7 +247,7 @@ function hideUnnecessaryElements() {
                 }
             });
         } catch (e) {
-            console.log('Selector error:', selector);
+            console.log('선택자 오류:', selector);
         }
     });
     
@@ -292,7 +292,7 @@ function extractMetadata() {
                 }
             }
         } catch (e) {
-            console.log('Metadata extraction error:', field);
+            console.log('메타데이터 추출 오류:', field);
         }
     }
     
@@ -305,7 +305,7 @@ function extractMetadata() {
                 .substring(0, 5000);
         }
     } catch (e) {
-        console.log('Raw text extraction error');
+        console.log('전체 텍스트 추출 오류');
     }
     
     return metadata;
@@ -316,9 +316,9 @@ function getJobContainerInfo() {
     const viewportHeight = window.innerHeight;
     
     const captureCount = Math.ceil(containerHeight / viewportHeight);
-    const limitedCount = Math.min(captureCount, 5); // Hard limit to 5
+    const limitedCount = Math.min(captureCount, 5);
     
-    console.log(`[CareerOS] Capture plan: ${limitedCount} screens (${Math.round(containerHeight)}px)`);
+    console.log(`[CareerOS] 캡처 계획: ${limitedCount}개 화면 (${Math.round(containerHeight)}px)`);
     
     return {
         containerTop: containerTop,
@@ -335,7 +335,7 @@ function getJobContainerInfo() {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'PREPARE_CAPTURE') {
-        toast.show('Preparing...', 'capture');
+        toast.show('준비 중...', 'capture');
         
         const hiddenElements = hideUnnecessaryElements();
         const metadata = extractMetadata();
