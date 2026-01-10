@@ -1,6 +1,5 @@
-// CareerOS Content Script - DOM 조작 및 메타데이터 추출
+// CareerOS Content Script
 
-// 토스트 알림 시스템
 class ToastNotification {
     constructor() {
         this.container = null;
@@ -28,11 +27,11 @@ class ToastNotification {
         const iconEl = toast.querySelector('.careeros-toast-icon');
         
         const icons = {
-            'capture': '📸',
-            'analyzing': '🔄',
-            'complete': '✅',
-            'error': '❌',
-            'info': 'ℹ️'
+            'capture': '...',
+            'analyzing': '...',
+            'complete': 'OK',
+            'error': 'ERR',
+            'info': 'i'
         };
         iconEl.textContent = icons[type] || icons.info;
         
@@ -50,11 +49,9 @@ class ToastNotification {
 
 const toast = new ToastNotification();
 
-// 채용 사이트별 선택자 설정
 const SITE_CONFIGS = {
     'wanted.co.kr': {
         jobContainer: '[class*="JobDescription"], article, main',
-        // 공고 끝 지점 마커
         endMarkers: [
             '[class*="ApplyButton"]',
             '[class*="ShareButton"]',
@@ -73,11 +70,11 @@ const SITE_CONFIGS = {
         metadataSelectors: {
             company: '[class*="CompanyName"], [class*="company-name"], h2',
             title: '[class*="JobHeader"] h1, [class*="job-title"], h1',
-            salary: '[class*="salary"], [class*="Salary"], [class*="연봉"]',
-            location: '[class*="location"], [class*="Location"], [class*="근무지"]',
-            deadline: '[class*="deadline"], [class*="Deadline"], [class*="마감"]',
+            salary: '[class*="salary"], [class*="Salary"]',
+            location: '[class*="location"], [class*="Location"]',
+            deadline: '[class*="deadline"], [class*="Deadline"]',
             company_description: '[class*="CompanyDescription"], [class*="company-info"]',
-            employee_count: '[class*="employee"], [class*="직원"]'
+            employee_count: '[class*="employee"]'
         }
     },
     'jobkorea.co.kr': {
@@ -151,16 +148,15 @@ const SITE_CONFIGS = {
         metadataSelectors: {
             company: '[class*="company"], [class*="Company"]',
             title: 'h1, [class*="title"], [class*="Title"]',
-            salary: '[class*="salary"], [class*="pay"], [class*="연봉"]',
-            location: '[class*="location"], [class*="address"], [class*="근무지"]',
-            deadline: '[class*="deadline"], [class*="마감"]',
+            salary: '[class*="salary"], [class*="pay"]',
+            location: '[class*="location"], [class*="address"]',
+            deadline: '[class*="deadline"]',
             company_description: '[class*="company-info"], [class*="about"]',
-            employee_count: '[class*="employee"], [class*="직원"]'
+            employee_count: '[class*="employee"]'
         }
     }
 };
 
-// 현재 사이트 설정
 function getSiteConfig() {
     const hostname = window.location.hostname;
     for (const site of Object.keys(SITE_CONFIGS)) {
@@ -171,11 +167,9 @@ function getSiteConfig() {
     return SITE_CONFIGS.default;
 }
 
-// 공고 컨테이너와 끝 지점 찾기
 function findJobBoundaries() {
     const config = getSiteConfig();
     
-    // 1. 컨테이너 찾기
     let container = null;
     const containerSelectors = config.jobContainer.split(', ');
     
@@ -191,7 +185,6 @@ function findJobBoundaries() {
         container = document.body;
     }
     
-    // 2. 공고 끝 지점 찾기
     let endElement = null;
     let endY = null;
     
@@ -199,7 +192,6 @@ function findJobBoundaries() {
         try {
             const elements = container.querySelectorAll(selector);
             for (const el of elements) {
-                // 숨겨지지 않은 첫 번째 요소
                 if (el.offsetHeight > 0) {
                     const rect = el.getBoundingClientRect();
                     const elementY = rect.top + window.scrollY;
@@ -219,20 +211,18 @@ function findJobBoundaries() {
     const containerRect = container.getBoundingClientRect();
     const containerTop = containerRect.top + window.scrollY;
     
-    // 끝 지점이 없으면 컨테이너 높이 사용 (하지만 제한)
     let containerHeight;
     if (endY && endY > containerTop) {
         containerHeight = endY - containerTop;
-        console.log('[CareerOS] 공고 끝 지점 감지:', endElement?.className);
+        console.log('[CareerOS] End marker found:', endElement?.className);
     } else {
-        // 폴백: 컨테이너 높이의 80% (나머지는 추천 공고일 가능성)
-        containerHeight = container.scrollHeight * 0.8;
-        console.log('[CareerOS] 끝 지점 미감지, 컨테이너 80% 사용');
+        containerHeight = container.scrollHeight * 0.7;
+        console.log('[CareerOS] No end marker, using 70% of container');
     }
     
-    // 최소/최대 높이 제한
-    containerHeight = Math.min(containerHeight, window.innerHeight * 15); // 최대 15화면
-    containerHeight = Math.max(containerHeight, window.innerHeight); // 최소 1화면
+    // Limits: min 1 screen, max 5 screens
+    containerHeight = Math.min(containerHeight, window.innerHeight * 5);
+    containerHeight = Math.max(containerHeight, window.innerHeight);
     
     return {
         container: container,
@@ -241,7 +231,6 @@ function findJobBoundaries() {
     };
 }
 
-// 불필요한 요소 숨기기
 function hideUnnecessaryElements() {
     const config = getSiteConfig();
     const hiddenElements = [];
@@ -265,14 +254,12 @@ function hideUnnecessaryElements() {
     return hiddenElements;
 }
 
-// 숨긴 요소 복원
 function restoreElements(hiddenElements) {
     hiddenElements.forEach(({ element, originalDisplay }) => {
         element.style.display = originalDisplay;
     });
 }
 
-// 메타데이터 추출
 function extractMetadata() {
     const config = getSiteConfig();
     const metadata = {
@@ -288,7 +275,6 @@ function extractMetadata() {
         raw_text: null
     };
     
-    // 각 필드 추출
     for (const [field, selector] of Object.entries(config.metadataSelectors)) {
         try {
             const selectors = selector.split(', ');
@@ -310,7 +296,6 @@ function extractMetadata() {
         }
     }
     
-    // 전체 텍스트
     try {
         const { container } = findJobBoundaries();
         if (container) {
@@ -326,16 +311,14 @@ function extractMetadata() {
     return metadata;
 }
 
-// 공고 영역 정보 계산
 function getJobContainerInfo() {
     const { containerTop, containerHeight } = findJobBoundaries();
     const viewportHeight = window.innerHeight;
     
-    // 필요한 캡처 횟수
     const captureCount = Math.ceil(containerHeight / viewportHeight);
-    const limitedCount = Math.min(captureCount, 10);
+    const limitedCount = Math.min(captureCount, 5); // Hard limit to 5
     
-    console.log(`[CareerOS] 캡처 계획: ${limitedCount}개 스크린 (공고 높이: ${Math.round(containerHeight)}px)`);
+    console.log(`[CareerOS] Capture plan: ${limitedCount} screens (${Math.round(containerHeight)}px)`);
     
     return {
         containerTop: containerTop,
@@ -350,18 +333,12 @@ function getJobContainerInfo() {
     };
 }
 
-// 메시지 리스너
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'PREPARE_CAPTURE') {
-        toast.show('캡처 준비중...', 'capture');
+        toast.show('Preparing...', 'capture');
         
-        // 불필요한 요소 숨기기
         const hiddenElements = hideUnnecessaryElements();
-        
-        // 메타데이터 추출
         const metadata = extractMetadata();
-        
-        // 공고 영역 정보
         const containerInfo = getJobContainerInfo();
         
         sendResponse({
@@ -371,7 +348,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             hiddenCount: hiddenElements.length
         });
         
-        // 캡처 후 복원
         setTimeout(() => {
             restoreElements(hiddenElements);
         }, 5000);
