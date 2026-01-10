@@ -30,6 +30,19 @@ async function startOneClickCapture() {
     const tabId = tab.id;
 
     try {
+        await showToast(tabId, '준비 중...', 'capture');
+        
+        // ✅ 추가: 요소 숨기기
+        const prepareResult = await chrome.tabs.sendMessage(tabId, { 
+            action: 'PREPARE_CAPTURE' 
+        });
+        
+        if (!prepareResult.success) {
+            throw new Error('페이지 준비 실패');
+        }
+        
+        // 대기 시간 추가 (요소가 완전히 숨겨지도록)
+        await sleep(1000);
         await showToast(tabId, 'PDF 생성 중...', 'capture');
 
         // 1. PDF 추출
@@ -75,7 +88,7 @@ async function startOneClickCapture() {
 
 // 별도의 폴링 전용 함수
 async function pollStatus(jobId, tabId) {
-    const maxAttempts = 60; // 2분 제한
+    const maxAttempts = 120; // 2분 제한
     for (let i = 0; i < maxAttempts; i++) {
         await sleep(2000); // 2초 간격
         const resp = await fetch(`${STATUS_ENDPOINT}/${jobId}`);
@@ -84,10 +97,11 @@ async function pollStatus(jobId, tabId) {
         if (result.status === 'success') return result;
         if (result.status === 'error') throw new Error(result.message);
         
-        // 진행 중임을 토스트로 업데이트 가능
-        await showToast(tabId, `분석 중... (${i + 1}/60)`, 'analyzing');
+        if (i % 15 === 0) {
+            await showToast(tabId, `분석 중... (${Math.floor(i/30)}분)`, 'analyzing');
+        }
     }
-    throw new Error('시간 초과');
+    throw new Error('시간 초과 (4분)');
 }
 
 async function submitAndPoll(job) {

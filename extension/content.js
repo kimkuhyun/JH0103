@@ -116,7 +116,13 @@ const SITE_CONFIGS = {
             '.related_jobs',
             '.recommend_jobs',
             '#footer',
-            '.footer'
+            '.footer',
+            '.jv_link_wrap',          
+            '.content_bottom',        
+            '[class*=\"HOT100\"]',      
+            '[class*=\"직업전체\"]',     
+            '.job_list_wrap',         
+            '#recomm_job_list' 
         ],
         metadataSelectors: {
             company: '.company_name, .comp_name',
