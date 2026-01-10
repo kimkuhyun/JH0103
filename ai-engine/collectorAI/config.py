@@ -7,15 +7,16 @@ IMAGE_CONFIG = {
     "MAX_WIDTH": 800,
     "QUALITY": 75,
     "FORMAT": "JPEG",
-    "MAX_CAPTURES": 10  # 5 -> 10으로 증가
+    "MAX_CAPTURES": 3,  # 10 -> 3 (캡처 페이지 수 제한)
+    "MAX_PAGES_TO_ANALYZE": 3  # Ollama 전송 페이지 제한 (성능 최적화)
 }
 
 # 모델 설정
 MODEL_CONFIG = {
     "MODEL_NAME": "qwen2.5vl",
-    "NUM_CTX": 16384,
+    "NUM_CTX": 8192,  # 16384 -> 8192 (메모리 최적화)
     "TEMPERATURE": 0,
-    "TIMEOUT": 300
+    "TIMEOUT": 60  # 300 -> 60초 (빠른 피드백)
 }
 
 # 채용공고 분석 프롬프트
