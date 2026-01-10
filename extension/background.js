@@ -30,9 +30,9 @@ async function startOneClickCapture() {
     const tabId = tab.id;
 
     try {
-        await showToast(tabId, '준비 중...', 'capture');
+        await showToast(tabId, '페이지 정리 중...', 'capture');
         
-        // ✅ 추가: 요소 숨기기
+        // 요소 제거
         const prepareResult = await chrome.tabs.sendMessage(tabId, { 
             action: 'PREPARE_CAPTURE' 
         });
@@ -41,11 +41,14 @@ async function startOneClickCapture() {
             throw new Error('페이지 준비 실패');
         }
         
-        // 대기 시간 추가 (요소가 완전히 숨겨지도록)
-        await sleep(1000);
+        console.log(`[CareerOS] ${prepareResult.removedCount}개 요소 제거 완료`);
+        
+        // 요소 제거 완료 대기 (2초 → 3초로 증가)
+        await sleep(3000);
+        
         await showToast(tabId, 'PDF 생성 중...', 'capture');
 
-        // 1. PDF 추출
+        // PDF 생성
         await chrome.debugger.attach({ tabId }, "1.3");
         const result = await chrome.debugger.sendCommand({ tabId }, "Page.printToPDF", {
             printBackground: true,
@@ -54,107 +57,73 @@ async function startOneClickCapture() {
         const pdfBase64 = result.data;
         await chrome.debugger.detach({ tabId });
 
-        await showToast(tabId, '서버 전송 및 분석 시작...', 'analyzing');
+        await showToast(tabId, 'AI 분석 시작...', 'analyzing');
 
-        // 2. 서버에 Job 등록 (등록 즉시 job_id를 반환받음)
+        // 서버 전송
         const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 pdf: pdfBase64,
                 url: tab.url,
-                metadata: { title: tab.title, company: tab.title.split(' ')[0] }
+                metadata: prepareResult.metadata
             })
         });
 
-        if (!response.ok) throw new Error('서버 요청 실패');
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || '서버 요청 실패');
+        }
+        
         const { job_id } = await response.json();
 
-        // 3. 폴링 시작 (상태가 success가 될 때까지 반복 확인)
+        // 폴링 시작
         const finalResult = await pollStatus(job_id, tabId); 
         
         if (finalResult.status === 'success') {
-            await showToast(tabId, 'AI 분석 및 저장 완료!', 'complete');
-            console.log("최종 데이터:", finalResult.data);
-            // 여기서 CareerOS 대시보드 리로드 명령 등을 보낼 수 있습니다.
+            await showToast(tabId, 'AI 분석 완료! ✅', 'complete');
+            console.log('[CareerOS] 최종 결과:', finalResult.data);
+            
+            // 3초 후 토스트 자동 숨김
+            await sleep(3000);
+            await hideToast(tabId);
         }
 
     } catch (error) {
-        console.error('실행 실패:', error);
+        console.error('[CareerOS] 실행 실패:', error);
         await showToast(tabId, `오류: ${error.message}`, 'error');
         if (tabId) chrome.debugger.detach({ tabId }).catch(() => {});
+        
+        // 5초 후 에러 토스트 숨김
+        await sleep(5000);
+        await hideToast(tabId);
     }
 }
 
-// 별도의 폴링 전용 함수
 async function pollStatus(jobId, tabId) {
-    const maxAttempts = 120; // 2분 제한
+    const maxAttempts = 30; // 60초 (2초 × 30회)
     for (let i = 0; i < maxAttempts; i++) {
-        await sleep(2000); // 2초 간격
-        const resp = await fetch(`${STATUS_ENDPOINT}/${jobId}`);
-        const result = await resp.json();
+        await sleep(2000);
+        
+        try {
+            const resp = await fetch(`${STATUS_ENDPOINT}/${jobId}`);
+            const result = await resp.json();
 
-        if (result.status === 'success') return result;
-        if (result.status === 'error') throw new Error(result.message);
-        
-        if (i % 15 === 0) {
-            await showToast(tabId, `분석 중... (${Math.floor(i/30)}분)`, 'analyzing');
-        }
-    }
-    throw new Error('시간 초과 (4분)');
-}
-
-async function submitAndPoll(job) {
-    try {
-        const submitResponse = await fetch(API_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                url: job.url,
-                metadata: job.metadata
-            })
-        });
-        
-        if (!submitResponse.ok) {
-            const errorText = await submitResponse.text();
-            return { success: false, message: errorText };
-        }
-        
-        const { job_id } = await submitResponse.json();
-        
-        const maxAttempts = 90;  // 3분
-        let attempts = 0;
-        
-        while (attempts < maxAttempts) {
-            await sleep(2000);
-            
-            try {
-                const statusResponse = await fetch(`${STATUS_ENDPOINT}/${job_id}`);
-                
-                if (!statusResponse.ok) {
-                    continue;
-                }
-                
-                const status = await statusResponse.json();
-                
-                if (status.status === 'success') {
-                    return { success: true, data: status.data };
-                } else if (status.status === 'error') {
-                    return { success: false, message: status.message };
-                }
-                
-            } catch (pollError) {
-                console.error('폴링 오류:', pollError);
+            if (result.status === 'success') return result;
+            if (result.status === 'error') {
+                throw new Error(result.message || 'AI 분석 실패');
             }
             
-            attempts++;
+            // 10초마다 진행 상황 표시
+            if (i > 0 && i % 5 === 0) {
+                await showToast(tabId, `분석 중... (${i * 2}초 경과)`, 'analyzing');
+            }
+        } catch (fetchError) {
+            console.error('[CareerOS] 폴링 오류:', fetchError);
+            if (i === maxAttempts - 1) throw fetchError;
         }
-        
-        return { success: false, message: '타임아웃 (3분 초과)' };
-        
-    } catch (error) {
-        return { success: false, message: error.message };
     }
+    throw new Error('분석 시간 초과 (60초)');
 }
 
 async function showToast(tabId, message, type) {
@@ -165,7 +134,7 @@ async function showToast(tabId, message, type) {
             type: type
         });
     } catch (e) {
-        console.log('토스트 오류:', e);
+        console.log('[CareerOS] 토스트 표시 실패:', e);
     }
 }
 
@@ -177,22 +146,4 @@ async function hideToast(tabId) {
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function saveJob(job) {
-    const result = await chrome.storage.local.get([STORAGE_KEYS.JOBS]);
-    const jobs = result[STORAGE_KEYS.JOBS] || [];
-    jobs.unshift(job);
-    if (jobs.length > 20) jobs.pop();
-    await chrome.storage.local.set({ [STORAGE_KEYS.JOBS]: jobs });
-}
-
-async function updateJobStatus(jobId, status) {
-    const result = await chrome.storage.local.get([STORAGE_KEYS.JOBS]);
-    const jobs = result[STORAGE_KEYS.JOBS] || [];
-    const idx = jobs.findIndex(j => j.id === jobId);
-    if (idx !== -1) {
-        jobs[idx].status = status;
-        await chrome.storage.local.set({ [STORAGE_KEYS.JOBS]: jobs });
-    }
 }
