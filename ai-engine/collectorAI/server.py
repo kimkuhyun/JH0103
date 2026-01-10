@@ -32,53 +32,15 @@ job_queue = queue.Queue()
 job_results = {}
 job_lock = threading.Lock()
 
-def generate_pdf_from_url(url, output_path):
-    """Selenium PDF 생성 (동기, 스레드 안전)"""
-    driver = None
+def save_pdf_from_extension(pdf_base64, output_path):
+    """익스텐션에서 보낸 Base64 데이터를 PDF 파일로 저장"""
     try:
-        print(f"[Selenium] 시작: {url[:50]}...")
-        
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.binary_location = '/usr/bin/chromium'
-        
-        service = Service('/usr/bin/chromedriver')
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        print(f"[Selenium] 페이지 로드")
-        driver.get(url)
-        time.sleep(3)  # 동적 콘텐츠 대기
-        
-        print(f"[Selenium] PDF 생성")
-        pdf_settings = {
-            'landscape': False,
-            'displayHeaderFooter': False,
-            'printBackground': True,
-            'preferCSSPageSize': True,
-        }
-        
-        pdf_data = driver.execute_cdp_cmd('Page.printToPDF', pdf_settings)
-        pdf_bytes = base64.b64decode(pdf_data['data'])
-        
+        pdf_bytes = base64.b64decode(pdf_base64)
         with open(output_path, 'wb') as f:
             f.write(pdf_bytes)
-        
-        driver.quit()
-        
-        size_kb = len(pdf_bytes) // 1024
-        print(f"[Selenium] 완료: {size_kb}KB")
         return True
-        
     except Exception as e:
-        print(f"[Selenium] 오류: {e}")
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
+        print(f"[서버] PDF 저장 오류: {e}")
         return False
 
 def pdf_to_images(pdf_path):
@@ -221,21 +183,19 @@ def infer_industry(data):
     
     return "서비스"
 
-def process_job(job_id, url, metadata):
-    """작업 처리 (스레드 안전)"""
+def process_job(job_id, pdf_data, url, metadata): # pdf_data 파라미터 추가
     try:
         print(f"[워커 {job_id[:8]}] 시작")
-        
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         company = metadata.get('company', 'unknown').replace('/', '_')[:30]
         
         pdf_file = f"{company}_{ts}.pdf"
         pdf_path = os.path.join(PDF_DIR, pdf_file)
         
-        # PDF 생성 (동기)
-        if not generate_pdf_from_url(url, pdf_path):
+        # [변경] 셀레니움 대신 익스텐션이 보낸 데이터를 저장
+        if not save_pdf_from_extension(pdf_data, pdf_path):
             with job_lock:
-                job_results[job_id] = {"status": "error", "message": "PDF 실패"}
+                job_results[job_id] = {"status": "error", "message": "PDF 저장 실패"}
             return
         
         # 변환
@@ -310,12 +270,14 @@ def process_job(job_id, url, metadata):
         with job_lock:
             job_results[job_id] = {"status": "error", "message": str(e)}
 
+# 서버 코드 하단 worker 부분 수정
 def worker():
     """백그라운드 워커"""
     while True:
         try:
-            job_id, url, metadata = job_queue.get()
-            process_job(job_id, url, metadata)
+            # 큐에서 pdf_data까지 4개를 꺼내도록 수정
+            job_id, pdf_data, url, metadata = job_queue.get() 
+            process_job(job_id, pdf_data, url, metadata)
             job_queue.task_done()
         except Exception as e:
             print(f"[워커] 오류: {e}")
@@ -331,17 +293,19 @@ def health():
 def analyze():
     data = request.json
     url = data.get('url', '')
+    pdf_data = data.get('pdf')  # 익스텐션이 보낸 base64 PDF 데이터
     metadata = data.get('metadata', {})
     
-    if not url:
-        return jsonify({"error": "URL 필요"}), 400
+    if not pdf_data:
+        return jsonify({"error": "PDF 데이터가 없습니다."}), 400
     
     job_id = str(uuid.uuid4())
     
     with job_lock:
         job_results[job_id] = {"status": "queued"}
     
-    job_queue.put((job_id, url, metadata))
+    # 큐에 pdf_data를 함께 넣어줍니다.
+    job_queue.put((job_id, pdf_data, url, metadata))
     print(f"[서버] 등록: {job_id[:8]}")
     
     return jsonify({"status": "queued", "job_id": job_id})
