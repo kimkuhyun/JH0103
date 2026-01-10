@@ -183,7 +183,19 @@ def infer_industry(data):
     
     return "서비스"
 
-def process_job(job_id, pdf_data, url, metadata): # pdf_data 파라미터 추가
+def extract_text_from_pdf(pdf_path):
+    """PDF에서 순수 텍스트를 추출하여 AI의 OCR 부담을 줄임"""
+    try:
+        doc = fitz.open(pdf_path)
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        doc.close()
+        return text.strip()
+    except Exception as e:
+        print(f"[서버] 텍스트 추출 오류: {e}")
+        return ""
+def process_job(job_id, pdf_data, url, metadata):
     try:
         print(f"[워커 {job_id[:8]}] 시작")
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -192,20 +204,21 @@ def process_job(job_id, pdf_data, url, metadata): # pdf_data 파라미터 추가
         pdf_file = f"{company}_{ts}.pdf"
         pdf_path = os.path.join(PDF_DIR, pdf_file)
         
-        # [변경] 셀레니움 대신 익스텐션이 보낸 데이터를 저장
         if not save_pdf_from_extension(pdf_data, pdf_path):
             with job_lock:
                 job_results[job_id] = {"status": "error", "message": "PDF 저장 실패"}
             return
-        
-        # 변환
+
+        # 1. [추가] PDF에서 순수 텍스트 먼저 추출 (AI 정확도 향상의 핵심)
+        raw_text = extract_text_from_pdf(pdf_path)
+
+        # 2. 이미지 변환 (비전 모델의 레이아웃 파악용)
         images = pdf_to_images(pdf_path)
         if not images:
             with job_lock:
                 job_results[job_id] = {"status": "error", "message": "변환 실패"}
             return
         
-        # 병합
         img_file = f"{company}_{ts}.jpg"
         img_path = os.path.join(IMAGE_DIR, img_file)
         merged = merge_images_vertically(images, save_path=img_path)
@@ -215,32 +228,33 @@ def process_job(job_id, pdf_data, url, metadata): # pdf_data 파라미터 추가
                 job_results[job_id] = {"status": "error", "message": "병합 실패"}
             return
         
-        # 분석
+        # 3. [수정] 프롬프트 강화: 추출된 텍스트를 프롬프트에 포함
         today = datetime.now().strftime("%Y-%m-%d")
-        prompt = get_analysis_prompt(url, today, metadata)
+        base_prompt = get_analysis_prompt(url, today, metadata)
         
-        print(f"[워커 {job_id[:8]}] 분석")
-        data = analyze_with_vision_model(merged, prompt)
+        # 라마 3.2 비전 모델이 텍스트 소스를 참고하도록 유도
+        enhanced_prompt = f"""
+        {base_prompt}
+        
+        [가장 중요: 아래의 추출된 텍스트를 최우선으로 참고하여 분석하세요]
+        텍스트 소스:
+        {raw_text[:4000]} 
+        
+        [주의] 이미지 하단의 '추천 공고'나 '관련 공고' 정보는 무시하고, 상단의 본문 채용 정보만 분석하세요.
+        """
+        
+        print(f"[워커 {job_id[:8]}]  비전 분석 실행 (텍스트 포함)")
+        data = analyze_with_vision_model(merged, enhanced_prompt)
         
         if not data:
             with job_lock:
                 job_results[job_id] = {
                     "status": "error",
-                    "message": "분석 실패",
+                    "message": "분석 실패 (타임아웃 가능성)",
                     "pdf": pdf_file,
                     "image": img_file
                 }
             return
-        
-        # 후처리
-        if not data.get("meta", {}).get("industry_domain"):
-            if "meta" not in data:
-                data["meta"] = {}
-            data["meta"]["industry_domain"] = infer_industry(data)
-        
-        if "analysis" in data and "working_conditions" in data["analysis"]:
-            if not data["analysis"]["working_conditions"].get("salary"):
-                data["analysis"]["working_conditions"]["salary"] = "회사 내규에 따름"
         
         # 저장
         comp = data.get('company_info', {}).get('name') or data.get('job_summary', {}).get('company', 'Unknown')

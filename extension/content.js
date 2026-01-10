@@ -240,22 +240,22 @@ function hideUnnecessaryElements() {
     const config = getSiteConfig();
     const hiddenElements = [];
     
-    config.hideSelectors.forEach(selector => {
+    // 사람인의 경우 .related_jobs, .recommend_jobs 등을 명확히 타겟팅
+    const selectorsToHide = [
+        ...config.hideSelectors,
+        '.related_jobs', '.recommend_jobs', '#footer', '.jv_link_wrap', '.content_bottom'
+    ];
+    
+    selectorsToHide.forEach(selector => {
         try {
             document.querySelectorAll(selector).forEach(el => {
-                if (el.style.display !== 'none') {
-                    hiddenElements.push({
-                        element: el,
-                        originalDisplay: el.style.display
-                    });
-                    el.style.display = 'none';
+                if (el && el.style.display !== 'none') {
+                    hiddenElements.push({ element: el, originalDisplay: el.style.display });
+                    el.style.display = 'none'; // PDF 생성 전 노이즈 제거
                 }
             });
-        } catch (e) {
-            console.log('선택자 오류:', selector);
-        }
+        } catch (e) { console.log('차단 실패:', selector); }
     });
-    
     return hiddenElements;
 }
 
