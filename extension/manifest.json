@@ -1,16 +1,18 @@
 {
   "manifest_version": 3,
   "name": "CareerOS Collector",
-  "version": "2.1",
-  "description": "채용 공고 캡처 및 분석 (단축키 지원)",
+  "version": "3.0",
+  "description": "채용 공고 원클릭 캡처 및 AI 분석",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "tabs"
   ],
   "host_permissions": [
-    "http://localhost:5000/*" 
+    "http://localhost:5000/*",
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
@@ -18,27 +20,26 @@
   "action": {
     "default_popup": "popup.html"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["toast.css"]
+    }
+  ],
   "commands": {
-    "toggle-capture": {
+    "one-click-capture": {
       "suggested_key": {
         "default": "Alt+Shift+S",
         "mac": "Alt+Shift+S"
       },
-      "description": "캡처 모드 시작/종료"
-    },
-    "take-snapshot": {
-      "suggested_key": {
-        "default": "Alt+Shift+C",
-        "mac": "Alt+Shift+C"
-      },
-      "description": "현재 화면 찍기"
-    },
-    "finish-analysis": {
-      "suggested_key": {
-        "default": "Alt+Shift+F",
-        "mac": "Alt+Shift+F"
-      },
-      "description": "분석 요청하기"
+      "description": "공고 원클릭 캡처 및 분석"
     }
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["toast.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

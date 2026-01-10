@@ -3,88 +3,180 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body { width: 360px; padding: 16px; font-family: 'Pretendard', sans-serif; background-color: #F8FAFC; }
-    h2 { margin: 0 0 16px 0; color: #0f172a; font-size: 18px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     
-    button {
-      width: 100%; padding: 12px; border: none; border-radius: 8px;
-      font-weight: bold; cursor: pointer; font-size: 13px;
-      transition: all 0.2s; margin-bottom: 8px;
+    body { 
+      width: 320px; 
+      padding: 20px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     }
     
-    #startBtn { background: #0052CC; color: white; }
-    #snapBtn { background: #0f172a; color: white; display: none; }
-    #finishBtn { background: #059669; color: white; display: none; }
-    #resetBtn { background: #ef4444; color: white; display: none; margin-top: 5px;}
-    
-    .badge { background: #e2e8f0; color: #475569; padding: 4px 8px; border-radius: 4px; font-size: 11px; }
-
-    /* 작업 목록 스타일 */
-    .divider { height: 1px; background: #e2e8f0; margin: 16px 0; }
-    
-    .list-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
     }
-    .list-title { font-size: 12px; font-weight: bold; color:#64748b; }
-    #clearJobsBtn { 
-      background: white; color: #64748b; border: 1px solid #cbd5e1; 
-      padding: 4px 10px; font-size: 11px; width: auto; margin: 0; 
+    
+    h1 { 
+      font-size: 20px; 
+      font-weight: 800; 
+      color: #0f172a;
+      margin-bottom: 4px;
     }
-    #clearJobsBtn:hover { background: #f1f5f9; color: #ef4444; border-color: #ef4444; }
-
+    
+    .subtitle {
+      font-size: 12px;
+      color: #64748b;
+    }
+    
+    .main-btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #0052CC 0%, #2563eb 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    
+    .main-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+    }
+    
+    .main-btn:active {
+      transform: translateY(0);
+    }
+    
+    .shortcut {
+      text-align: center;
+      margin-top: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 8px;
+      font-size: 12px;
+      color: #475569;
+    }
+    
+    .shortcut kbd {
+      background: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    
+    .divider {
+      height: 1px;
+      background: #cbd5e1;
+      margin: 16px 0;
+    }
+    
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .history-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    
+    .clear-btn {
+      background: none;
+      border: 1px solid #e2e8f0;
+      color: #94a3b8;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+    
+    .clear-btn:hover {
+      background: #fee2e2;
+      border-color: #fecaca;
+      color: #dc2626;
+    }
+    
+    #jobList {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
     .job-item {
-      background: white; border: 1px solid #e2e8f0; border-radius: 8px;
-      padding: 10px; margin-bottom: 8px; 
-      display: flex; justify-content: space-between; align-items: center;
-      gap: 8px; /* 간격 추가 */
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     
-    .job-info {
-        display: flex; align-items: center; gap: 8px; flex: 1; overflow: hidden;
+    .job-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #334155;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 180px;
     }
-
-    .job-title { 
-        font-size: 12px; font-weight: bold; color: #334155; 
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; 
+    
+    .status-badge {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 4px;
     }
-
-    .job-actions {
-        display: flex; align-items: center; gap: 6px;
+    
+    .status-PROCESSING { background: #dbeafe; color: #1e40af; }
+    .status-COMPLETED { background: #dcfce7; color: #166534; }
+    .status-FAILED { background: #fee2e2; color: #991b1b; }
+    
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: #94a3b8;
+      font-size: 12px;
     }
-
-    .status-badge { font-size: 11px; font-weight: bold; padding: 4px 6px; border-radius: 4px; white-space: nowrap;}
-    .status-pending { background: #fef9c3; color: #854d0e; }
-    .status-processing { background: #dbeafe; color: #1e40af; animation: pulse 1.5s infinite; }
-    .status-completed { background: #dcfce7; color: #166534; }
-    .status-failed { background: #fee2e2; color: #991b1b; }
-
-    /* ✨ 개별 삭제 버튼 스타일 */
-    .btn-delete-job {
-        background: none; border: none; color: #94a3b8; 
-        font-size: 14px; cursor: pointer; padding: 0 4px;
-        margin: 0; width: auto; /* 상단 공통 버튼 스타일 덮어쓰기 */
-    }
-    .btn-delete-job:hover { color: #ef4444; background: none; }
-
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
   </style>
 </head>
 <body>
-  <h2>CareerOS <span id="imgCount" class="badge">대기</span></h2>
-
-  <button id="startBtn">📸 캡처 시작 (Alt+Shift+S)</button>
-  <button id="snapBtn">➕ 화면 추가 (Alt+Shift+C)</button>
-  <button id="finishBtn">🚀 분석 요청 (Alt+Shift+F)</button>
-  <button id="resetBtn">🗑️ 취소</button>
-
+  <div class="header">
+    <h1>CareerOS</h1>
+    <p class="subtitle">채용 공고 AI 분석</p>
+  </div>
+  
+  <button id="captureBtn" class="main-btn">
+    <span>공고 캡처 및 분석</span>
+  </button>
+  
+  <div class="shortcut">
+    단축키: <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>
+  </div>
+  
   <div class="divider"></div>
   
-  <div class="list-header">
-    <span class="list-title">작업 목록</span>
-    <button id="clearJobsBtn">전체 삭제</button>
+  <div class="history-header">
+    <span class="history-title">최근 분석 기록</span>
+    <button id="clearBtn" class="clear-btn">전체 삭제</button>
   </div>
-
+  
   <div id="jobList"></div>
+  
   <script src="popup.js"></script>
 </body>
 </html>
