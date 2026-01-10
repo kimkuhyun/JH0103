@@ -1,4 +1,4 @@
-// CareerOS Background Service Worker - One-Click Capture System
+// CareerOS Background Service Worker
 
 const STORAGE_KEYS = { 
     JOBS: 'analysisJobs',
@@ -6,27 +6,24 @@ const STORAGE_KEYS = {
 };
 
 const API_ENDPOINT = 'http://localhost:5000/analyze';
+const STATUS_ENDPOINT = 'http://localhost:5000/status';
 
-// 단축키 리스너
 chrome.commands.onCommand.addListener(async (command) => {
     if (command === 'one-click-capture') {
         await startOneClickCapture();
     }
 });
 
-// 메시지 리스너
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'START_CAPTURE') {
         startOneClickCapture();
     }
 });
 
-// 익스텐션 아이콘 클릭
 chrome.action.onClicked.addListener(async (tab) => {
     await startOneClickCapture();
 });
 
-// === 메인 원클릭 캡처 함수 ===
 async function startOneClickCapture() {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs.length === 0) return;
@@ -35,25 +32,22 @@ async function startOneClickCapture() {
     const tabId = tab.id;
     
     try {
-        await showToast(tabId, '캡처 시작! 완료될 때까지 대기해주세요', 'capture');
+        await showToast(tabId, 'Capture starting', 'capture');
         
-        // Content script에 준비 요청
         const prepareResult = await chrome.tabs.sendMessage(tabId, { 
             action: 'PREPARE_CAPTURE' 
         });
         
         if (!prepareResult.success) {
-            throw new Error('페이지 준비 실패');
+            throw new Error('Page preparation failed');
         }
         
         const { metadata, pageInfo } = prepareResult;
         
-        // 스크린샷 캡처
-        await showToast(tabId, '페이지 캡처중... 탭을 유지해주세요', 'capture');
+        await showToast(tabId, 'Capturing page, please wait', 'capture');
         const images = await captureJobPosting(tabId, pageInfo);
         
-        // AI 분석
-        await showToast(tabId, 'AI 분석중... 다른 작업 가능합니다', 'analyzing');
+        await showToast(tabId, 'AI analyzing, you can switch tabs now', 'analyzing');
         
         const job = {
             id: Date.now(),
@@ -66,48 +60,40 @@ async function startOneClickCapture() {
         
         await saveJob(job);
         
-        // 서버로 전송
-        const result = await sendToServer(job);
+        // Submit job and poll for results
+        const result = await submitAndPoll(job);
         
         if (result.success) {
-            await showToast(tabId, '공고 분석 완료!', 'complete');
+            await showToast(tabId, 'Analysis complete', 'complete');
             await updateJobStatus(job.id, 'COMPLETED');
         } else {
-            throw new Error(result.message || '분석 실패');
+            throw new Error(result.message || 'Analysis failed');
         }
         
-        setTimeout(async () => {
-            await hideToast(tabId);
-        }, 3000);
+        setTimeout(() => hideToast(tabId), 3000);
         
     } catch (error) {
         console.error('Capture error:', error);
-        await showToast(tabId, `오류: ${error.message}`, 'error');
-        setTimeout(async () => {
-            await hideToast(tabId);
-        }, 3000);
+        await showToast(tabId, `Error: ${error.message}`, 'error');
+        setTimeout(() => hideToast(tabId), 3000);
     }
 }
 
-// === 공고 캡처 (개선된 버전) ===
 async function captureJobPosting(tabId, pageInfo) {
     const images = [];
     const { containerTop, containerHeight, viewportHeight, captureCount, currentScrollY } = pageInfo;
     
-    console.log(`캡처 계획: ${captureCount}개 이미지, 컨테이너 높이: ${containerHeight}px`);
+    console.log(`Capture plan: ${captureCount} images, height: ${containerHeight}px`);
     
-    // 컨테이너 시작 위치로 스크롤
     await chrome.tabs.sendMessage(tabId, { 
         action: 'SCROLL_TO', 
         position: containerTop 
     });
     await sleep(500);
     
-    // 컨테이너 영역만 캡처
     for (let i = 0; i < captureCount; i++) {
         const scrollPosition = containerTop + (i * viewportHeight);
         
-        // 컨테이너 끝을 넘지 않도록
         if (scrollPosition > containerTop + containerHeight) {
             break;
         }
@@ -119,8 +105,8 @@ async function captureJobPosting(tabId, pageInfo) {
         await sleep(400);
         
         try {
-            const tab = await chrome.tabs.get(tabId);
-            const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { 
+            const currentTab = await chrome.tabs.get(tabId);
+            const dataUrl = await chrome.tabs.captureVisibleTab(currentTab.windowId, { 
                 format: 'png' 
             });
             images.push(dataUrl.split(',')[1]);
@@ -129,20 +115,19 @@ async function captureJobPosting(tabId, pageInfo) {
         }
     }
     
-    // 원래 위치로 복원
     await chrome.tabs.sendMessage(tabId, { 
         action: 'SCROLL_TO', 
         position: currentScrollY 
     });
     
-    console.log(`캡처 완료: ${images.length}개 이미지`);
+    console.log(`Captured ${images.length} images`);
     return images;
 }
 
-// === 서버 전송 (단순화) ===
-async function sendToServer(job) {
+async function submitAndPoll(job) {
     try {
-        const response = await fetch(API_ENDPOINT, {
+        // Submit job
+        const submitResponse = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -152,20 +137,49 @@ async function sendToServer(job) {
             })
         });
         
-        if (!response.ok) {
-            const errorText = await response.text();
+        if (!submitResponse.ok) {
+            const errorText = await submitResponse.text();
             return { success: false, message: errorText };
         }
         
-        const result = await response.json();
-        return { success: true, data: result };
+        const { job_id } = await submitResponse.json();
+        
+        // Poll for results
+        const maxAttempts = 60; // 60 attempts x 2 seconds = 2 minutes max
+        let attempts = 0;
+        
+        while (attempts < maxAttempts) {
+            await sleep(2000); // Poll every 2 seconds
+            
+            try {
+                const statusResponse = await fetch(`${STATUS_ENDPOINT}/${job_id}`);
+                
+                if (!statusResponse.ok) {
+                    continue;
+                }
+                
+                const status = await statusResponse.json();
+                
+                if (status.status === 'success') {
+                    return { success: true, data: status.data };
+                } else if (status.status === 'error') {
+                    return { success: false, message: status.message };
+                }
+                // If queued or processing, continue polling
+                
+            } catch (pollError) {
+                console.error('Poll error:', pollError);
+            }
+            
+            attempts++;
+        }
+        
+        return { success: false, message: 'Timeout waiting for results' };
         
     } catch (error) {
         return { success: false, message: error.message };
     }
 }
-
-// === 유틸리티 함수 ===
 
 async function showToast(tabId, message, type) {
     try {
