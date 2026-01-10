@@ -52,6 +52,7 @@ const toast = new ToastNotification();
 const SITE_CONFIGS = {
     'wanted.co.kr': {
         jobContainer: '[class*="JobDescription"], article, main',
+        printButton: 'button[aria-label*="인쇄"], button[title*="인쇄"], [class*="print"]',
         endMarkers: [
             '[class*="ApplyButton"]',
             '[class*="ShareButton"]',
@@ -79,6 +80,7 @@ const SITE_CONFIGS = {
     },
     'jobkorea.co.kr': {
         jobContainer: '.jobView-content, .job-content, article, main',
+        printButton: '.btn_print, button[onclick*="print"]',
         endMarkers: [
             '.btnApply',
             '.applyBtn',
@@ -104,6 +106,7 @@ const SITE_CONFIGS = {
     },
     'saramin.co.kr': {
         jobContainer: '.content, .job_cont, article, main',
+        printButton: '.btn_print, a[href*="print"]',
         endMarkers: [
             '.btn_apply',
             '.jv_link_wrap',
@@ -127,6 +130,7 @@ const SITE_CONFIGS = {
     },
     'default': {
         jobContainer: 'main, article, [role="main"], .job-content, .content',
+        printButton: 'button[onclick*="print"], .print-btn, [class*="print"]',
         endMarkers: [
             '[class*="apply"]',
             '[class*="Apply"]',
@@ -216,12 +220,13 @@ function findJobBoundaries() {
         containerHeight = endY - containerTop;
         console.log('[CareerOS] 끝 마커 발견:', endElement?.className);
     } else {
-        containerHeight = container.scrollHeight * 0.7;
-        console.log('[CareerOS] 끝 마커 없음, 컨테이너의 70% 사용');
+        // 끝 마커 없으면 전체 컨테이너 사용 (100%)
+        containerHeight = container.scrollHeight;
+        console.log('[CareerOS] 끝 마커 없음, 전체 컨테이너 사용');
     }
     
-    // 제한: 최소 1화면, 최대 5화면
-    containerHeight = Math.min(containerHeight, window.innerHeight * 5);
+    // 제한: 최소 1화면, 최대 10화면
+    containerHeight = Math.min(containerHeight, window.innerHeight * 10);
     containerHeight = Math.max(containerHeight, window.innerHeight);
     
     return {
@@ -316,7 +321,7 @@ function getJobContainerInfo() {
     const viewportHeight = window.innerHeight;
     
     const captureCount = Math.ceil(containerHeight / viewportHeight);
-    const limitedCount = Math.min(captureCount, 5);
+    const limitedCount = Math.min(captureCount, 10); // 10장으로 증가
     
     console.log(`[CareerOS] 캡처 계획: ${limitedCount}개 화면 (${Math.round(containerHeight)}px)`);
     
@@ -350,7 +355,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         setTimeout(() => {
             restoreElements(hiddenElements);
-        }, 5000);
+        }, 10000); // 10초로 연장
         
         return true;
     }
