@@ -32,9 +32,10 @@ job_results = {}
 job_lock = threading.Lock()
 
 async def generate_pdf_from_url(url, output_path):
-    """Puppeteer로 PDF 생성"""
+    """Puppeteer PDF 생성"""
+    browser = None
     try:
-        print(f"[Puppeteer] 시작: {url}")
+        print(f"[Puppeteer] 1. Launch 시작")
         browser = await launch({
             'headless': True,
             'executablePath': '/usr/bin/chromium',
@@ -42,37 +43,59 @@ async def generate_pdf_from_url(url, output_path):
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-extensions'
             ]
         })
+        print(f"[Puppeteer] 2. Launch 완료")
         
         page = await browser.newPage()
+        print(f"[Puppeteer] 3. Page 생성")
+        
         await page.setViewport({'width': 1280, 'height': 1024})
         
-        print(f"[Puppeteer] 페이지 로드")
-        await page.goto(url, {'waitUntil': 'networkidle0', 'timeout': 60000})
-        await asyncio.sleep(3)
+        print(f"[Puppeteer] 4. 페이지 이동: {url[:50]}...")
+        await page.goto(url, {
+            'waitUntil': 'networkidle0',
+            'timeout': 60000
+        })
+        print(f"[Puppeteer] 5. 페이지 로드 완료")
         
-        print(f"[Puppeteer] PDF 생성")
+        await asyncio.sleep(2)
+        
+        print(f"[Puppeteer] 6. PDF 생성 시작")
         await page.pdf({
             'path': output_path,
             'format': 'A4',
             'printBackground': True,
-            'margin': {'top': '5mm', 'right': '5mm', 'bottom': '5mm', 'left': '5mm'}
+            'margin': {
+                'top': '5mm',
+                'right': '5mm',
+                'bottom': '5mm',
+                'left': '5mm'
+            }
         })
         
         await browser.close()
         
-        size_kb = os.path.getsize(output_path) // 1024
-        print(f"[Puppeteer] 완료: {size_kb}KB")
+        size = os.path.getsize(output_path) // 1024
+        print(f"[Puppeteer] 7. 완료: {size}KB")
         return True
         
     except Exception as e:
-        print(f"[Puppeteer] 실패: {e}")
+        print(f"[Puppeteer] 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        if browser:
+            try:
+                await browser.close()
+            except:
+                pass
         return False
 
 def pdf_to_images(pdf_path):
-    """PDF → 이미지 변환"""
+    """PDF → 이미지"""
     try:
         pdf_doc = fitz.open(pdf_path)
         images = []
@@ -98,7 +121,7 @@ def pdf_to_images(pdf_path):
         return images
         
     except Exception as e:
-        print(f"[서버] PDF 변환 실패: {e}")
+        print(f"[서버] PDF 변환 오류: {e}")
         return None
 
 def merge_images_vertically(base64_images, save_path=None):
@@ -153,22 +176,20 @@ def merge_images_vertically(base64_images, save_path=None):
         return merged_b64
         
     except Exception as e:
-        print(f"[서버] 병합 실패: {e}")
+        print(f"[서버] 병합 오류: {e}")
         return base64_images[0] if base64_images else None
 
 def save_image(base64_str, filepath):
-    """이미지 저장"""
     try:
         img_data = base64.b64decode(base64_str)
         img = Image.open(io.BytesIO(img_data))
         img.save(filepath, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
     except Exception as e:
-        print(f"[서버] 저장 실패: {e}")
+        print(f"[서버] 저장 오류: {e}")
 
 def analyze_with_vision_model(image_base64, prompt):
-    """Ollama 분석"""
     try:
-        print(f"[Ollama] 요청")
+        print(f"[Ollama] 요청 전송")
         
         response = requests.post(OLLAMA_URL, json={
             "model": MODEL_CONFIG["MODEL_NAME"],
@@ -195,7 +216,6 @@ def analyze_with_vision_model(image_base64, prompt):
         return None
 
 def infer_industry(data):
-    """산업 분류"""
     company_info = data.get("company_info", {})
     job_summary = data.get("job_summary", {})
     
@@ -221,7 +241,6 @@ def infer_industry(data):
     return "서비스"
 
 def process_job(job_id, url, metadata):
-    """작업 처리"""
     try:
         print(f"[워커 {job_id[:8]}] 시작")
         
@@ -232,6 +251,7 @@ def process_job(job_id, url, metadata):
         pdf_path = os.path.join(PDF_DIR, pdf_file)
         
         # PDF 생성
+        print(f"[워커 {job_id[:8]}] PDF 생성 시작")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         success = loop.run_until_complete(generate_pdf_from_url(url, pdf_path))
@@ -243,6 +263,7 @@ def process_job(job_id, url, metadata):
             return
         
         # PDF → 이미지
+        print(f"[워커 {job_id[:8]}] PDF 변환")
         images = pdf_to_images(pdf_path)
         if not images:
             with job_lock:
@@ -263,7 +284,7 @@ def process_job(job_id, url, metadata):
         today = datetime.now().strftime("%Y-%m-%d")
         prompt = get_analysis_prompt(url, today, metadata)
         
-        print(f"[워커 {job_id[:8]}] 분석")
+        print(f"[워커 {job_id[:8]}] AI 분석")
         data = analyze_with_vision_model(merged, prompt)
         
         if not data:
@@ -311,18 +332,19 @@ def process_job(job_id, url, metadata):
         
     except Exception as e:
         print(f"[워커 {job_id[:8]}] 오류: {e}")
+        import traceback
+        traceback.print_exc()
         with job_lock:
             job_results[job_id] = {"status": "error", "message": str(e)}
 
 def worker():
-    """백그라운드 워커"""
     while True:
         try:
             job_id, url, metadata = job_queue.get()
             process_job(job_id, url, metadata)
             job_queue.task_done()
         except Exception as e:
-            print(f"[워커] 오류: {e}")
+            print(f"[워커] 치명적 오류: {e}")
 
 worker_thread = threading.Thread(target=worker, daemon=True)
 worker_thread.start()
@@ -333,7 +355,6 @@ def health_check():
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    """작업 등록"""
     data = request.json
     
     url = data.get('url', '')
@@ -349,13 +370,12 @@ def analyze():
     
     job_queue.put((job_id, url, metadata))
     
-    print(f"[서버] 작업 {job_id[:8]} 등록: {url}")
+    print(f"[서버] 작업 {job_id[:8]} 등록")
     
     return jsonify({"status": "queued", "job_id": job_id})
 
 @app.route('/status/<job_id>', methods=['GET'])
 def get_status(job_id):
-    """상태 확인"""
     with job_lock:
         result = job_results.get(job_id)
     
@@ -367,6 +387,4 @@ def get_status(job_id):
 if __name__ == '__main__':
     print("[서버] CareerOS Collector AI")
     print(f"[서버] 데이터: {SAVE_DIR}")
-    print(f"[서버] PDF: {PDF_DIR}")
-    print(f"[서버] 이미지: {IMAGE_DIR}")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
