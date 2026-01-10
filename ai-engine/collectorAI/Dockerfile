@@ -6,8 +6,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 코드 복사
-COPY server.py .
+# 모든 Python 파일 복사
+COPY *.py .
 
 # 데이터 저장소 폴더 생성
 RUN mkdir -p /app/data

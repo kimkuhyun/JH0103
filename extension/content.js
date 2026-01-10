@@ -54,6 +54,13 @@ const toast = new ToastNotification();
 const SITE_CONFIGS = {
     'wanted.co.kr': {
         jobContainer: '[class*="JobDescription"], article, main',
+        // 공고 끝 지점 마커
+        endMarkers: [
+            '[class*="ApplyButton"]',
+            '[class*="ShareButton"]',
+            '[class*="SimilarJob"]',
+            '[class*="RelatedPosition"]'
+        ],
         hideSelectors: [
             '[class*="RelatedPosition"]',
             '[class*="RecommendPosition"]',
@@ -65,7 +72,7 @@ const SITE_CONFIGS = {
         ],
         metadataSelectors: {
             company: '[class*="CompanyName"], [class*="company-name"], h2',
-            title: '[class*="JobHeader\"] h1, [class*="job-title"], h1',
+            title: '[class*="JobHeader"] h1, [class*="job-title"], h1',
             salary: '[class*="salary"], [class*="Salary"], [class*="연봉"]',
             location: '[class*="location"], [class*="Location"], [class*="근무지"]',
             deadline: '[class*="deadline"], [class*="Deadline"], [class*="마감"]',
@@ -75,6 +82,12 @@ const SITE_CONFIGS = {
     },
     'jobkorea.co.kr': {
         jobContainer: '.jobView-content, .job-content, article, main',
+        endMarkers: [
+            '.btnApply',
+            '.applyBtn',
+            '.sameWork',
+            '.relateWork'
+        ],
         hideSelectors: [
             '.sameWork',
             '.relateWork',
@@ -94,6 +107,11 @@ const SITE_CONFIGS = {
     },
     'saramin.co.kr': {
         jobContainer: '.content, .job_cont, article, main',
+        endMarkers: [
+            '.btn_apply',
+            '.jv_link_wrap',
+            '.related_jobs'
+        ],
         hideSelectors: [
             '.related_jobs',
             '.recommend_jobs',
@@ -112,6 +130,13 @@ const SITE_CONFIGS = {
     },
     'default': {
         jobContainer: 'main, article, [role="main"], .job-content, .content',
+        endMarkers: [
+            '[class*="apply"]',
+            '[class*="Apply"]',
+            '[class*="share"]',
+            '[class*="related"]',
+            '[class*="similar"]'
+        ],
         hideSelectors: [
             '[class*="related"]',
             '[class*="recommend"]',
@@ -135,7 +160,7 @@ const SITE_CONFIGS = {
     }
 };
 
-// 현재 사이트 설정 가져오기
+// 현재 사이트 설정
 function getSiteConfig() {
     const hostname = window.location.hostname;
     for (const site of Object.keys(SITE_CONFIGS)) {
@@ -146,20 +171,74 @@ function getSiteConfig() {
     return SITE_CONFIGS.default;
 }
 
-// 공고 컨테이너 찾기
-function findJobContainer() {
+// 공고 컨테이너와 끝 지점 찾기
+function findJobBoundaries() {
     const config = getSiteConfig();
-    const selectors = config.jobContainer.split(', ');
     
-    for (const selector of selectors) {
-        const container = document.querySelector(selector.trim());
-        if (container && container.offsetHeight > 0) {
-            return container;
+    // 1. 컨테이너 찾기
+    let container = null;
+    const containerSelectors = config.jobContainer.split(', ');
+    
+    for (const selector of containerSelectors) {
+        const el = document.querySelector(selector.trim());
+        if (el && el.offsetHeight > 0) {
+            container = el;
+            break;
         }
     }
     
-    // 폴백: body 사용
-    return document.body;
+    if (!container) {
+        container = document.body;
+    }
+    
+    // 2. 공고 끝 지점 찾기
+    let endElement = null;
+    let endY = null;
+    
+    for (const selector of config.endMarkers) {
+        try {
+            const elements = container.querySelectorAll(selector);
+            for (const el of elements) {
+                // 숨겨지지 않은 첫 번째 요소
+                if (el.offsetHeight > 0) {
+                    const rect = el.getBoundingClientRect();
+                    const elementY = rect.top + window.scrollY;
+                    
+                    if (!endY || elementY < endY) {
+                        endY = elementY;
+                        endElement = el;
+                    }
+                    break;
+                }
+            }
+        } catch (e) {
+            console.log('End marker search error:', selector);
+        }
+    }
+    
+    const containerRect = container.getBoundingClientRect();
+    const containerTop = containerRect.top + window.scrollY;
+    
+    // 끝 지점이 없으면 컨테이너 높이 사용 (하지만 제한)
+    let containerHeight;
+    if (endY && endY > containerTop) {
+        containerHeight = endY - containerTop;
+        console.log('[CareerOS] 공고 끝 지점 감지:', endElement?.className);
+    } else {
+        // 폴백: 컨테이너 높이의 80% (나머지는 추천 공고일 가능성)
+        containerHeight = container.scrollHeight * 0.8;
+        console.log('[CareerOS] 끝 지점 미감지, 컨테이너 80% 사용');
+    }
+    
+    // 최소/최대 높이 제한
+    containerHeight = Math.min(containerHeight, window.innerHeight * 15); // 최대 15화면
+    containerHeight = Math.max(containerHeight, window.innerHeight); // 최소 1화면
+    
+    return {
+        container: container,
+        containerTop: containerTop,
+        containerHeight: containerHeight
+    };
 }
 
 // 불필요한 요소 숨기기
@@ -193,7 +272,7 @@ function restoreElements(hiddenElements) {
     });
 }
 
-// 메타데이터 추출 (확장된 버전)
+// 메타데이터 추출
 function extractMetadata() {
     const config = getSiteConfig();
     const metadata = {
@@ -209,7 +288,7 @@ function extractMetadata() {
         raw_text: null
     };
     
-    // 각 필드별로 추출
+    // 각 필드 추출
     for (const [field, selector] of Object.entries(config.metadataSelectors)) {
         try {
             const selectors = selector.split(', ');
@@ -218,7 +297,6 @@ function extractMetadata() {
                 if (el && el.textContent.trim()) {
                     let text = el.textContent.trim();
                     
-                    // 회사 소개는 길게, 나머지는 200자 제한
                     if (field === 'company_description') {
                         metadata[field] = text.substring(0, 1000);
                     } else {
@@ -232,11 +310,11 @@ function extractMetadata() {
         }
     }
     
-    // 전체 텍스트 추출
+    // 전체 텍스트
     try {
-        const mainContent = findJobContainer();
-        if (mainContent) {
-            metadata.raw_text = mainContent.textContent
+        const { container } = findJobBoundaries();
+        if (container) {
+            metadata.raw_text = container.textContent
                 .replace(/\s+/g, ' ')
                 .trim()
                 .substring(0, 5000);
@@ -248,21 +326,16 @@ function extractMetadata() {
     return metadata;
 }
 
-// 공고 컨테이너의 정확한 높이 계산
+// 공고 영역 정보 계산
 function getJobContainerInfo() {
-    const container = findJobContainer();
-    const rect = container.getBoundingClientRect();
+    const { containerTop, containerHeight } = findJobBoundaries();
     const viewportHeight = window.innerHeight;
     
-    // 컨테이너의 실제 높이와 위치
-    const containerTop = rect.top + window.scrollY;
-    const containerHeight = container.scrollHeight;
-    
-    // 필요한 캡처 횟수 계산
+    // 필요한 캡처 횟수
     const captureCount = Math.ceil(containerHeight / viewportHeight);
-    
-    // 너무 많으면 제한 (최대 10개)
     const limitedCount = Math.min(captureCount, 10);
+    
+    console.log(`[CareerOS] 캡처 계획: ${limitedCount}개 스크린 (공고 높이: ${Math.round(containerHeight)}px)`);
     
     return {
         containerTop: containerTop,
@@ -288,7 +361,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // 메타데이터 추출
         const metadata = extractMetadata();
         
-        // 공고 컨테이너 정보
+        // 공고 영역 정보
         const containerInfo = getJobContainerInfo();
         
         sendResponse({
@@ -298,7 +371,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             hiddenCount: hiddenElements.length
         });
         
-        // 캡처 완료 후 요소 복원
+        // 캡처 후 복원
         setTimeout(() => {
             restoreElements(hiddenElements);
         }, 5000);
