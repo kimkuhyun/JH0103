@@ -62,13 +62,20 @@ def save_pdf_from_extension(pdf_base64, output_path):
         print(f"[서버] PDF 저장 오류: {e}")
         return False
 
-def pdf_to_images(pdf_path):
-    """PDF → 이미지"""
+def pdf_to_images(pdf_path, max_pages=None):
+    """PDF → 이미지 (페이지 수 제한 가능)"""
     try:
         doc = fitz.open(pdf_path)
         images = []
         
-        for page_num in range(len(doc)):
+        # 페이지 수 제한
+        if max_pages is None:
+            max_pages = len(doc)
+        page_count = min(len(doc), max_pages)
+        
+        print(f"[서버] PDF 변환: 전체 {len(doc)}페이지 중 {page_count}페이지 처리")
+        
+        for page_num in range(page_count):
             page = doc[page_num]
             mat = fitz.Matrix(2.0, 2.0)
             pix = page.get_pixmap(matrix=mat)
@@ -85,7 +92,7 @@ def pdf_to_images(pdf_path):
             images.append(base64.b64encode(buf.getvalue()).decode('utf-8'))
         
         doc.close()
-        print(f"[서버] PDF → {len(images)}페이지")
+        print(f"[서버] PDF → {len(images)}페이지 변환 완료")
         return images
         
     except Exception as e:
@@ -158,7 +165,7 @@ def analyze_with_vision_model(image_base64, prompt, max_retries=2):
                 print(f"[Ollama] 재시도 {attempt}/{max_retries-1}")
                 time.sleep(2)
             
-            print(f"[Ollama] 요청 시작 (모델: {MODEL_CONFIG['MODEL_NAME']})")
+            print(f"[Ollama] 요청 시작 (모델: {MODEL_CONFIG['MODEL_NAME']}, 타임아웃: {MODEL_CONFIG['TIMEOUT']}초)")
             
             resp = requests.post(OLLAMA_URL, json={
                 "model": MODEL_CONFIG["MODEL_NAME"],
@@ -255,8 +262,10 @@ def process_job(job_id, pdf_data, url, metadata):
         # 2. 텍스트 추출
         raw_text = extract_text_from_pdf(pdf_path)
 
-        # 3. 이미지 변환
-        images = pdf_to_images(pdf_path)
+        # 3. 이미지 변환 (페이지 제한)
+        max_pages = IMAGE_CONFIG.get("MAX_PAGES_TO_ANALYZE", 3)
+        images = pdf_to_images(pdf_path, max_pages=max_pages)
+        
         if not images:
             with job_lock:
                 job_results[job_id] = {
@@ -421,6 +430,7 @@ if __name__ == '__main__':
     print(f"[서버] 데이터 디렉토리: {SAVE_DIR}")
     print(f"[서버] Ollama URL: {OLLAMA_URL}")
     print(f"[서버] 모델: {MODEL_CONFIG['MODEL_NAME']}")
+    print(f"[서버] 페이지 제한: {IMAGE_CONFIG.get('MAX_PAGES_TO_ANALYZE', 3)}페이지")
     
     # 시작 시 Ollama 체크
     ollama_status = check_ollama_connection()
