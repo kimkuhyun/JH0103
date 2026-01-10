@@ -27,11 +27,11 @@ class ToastNotification {
         const iconEl = toast.querySelector('.careeros-toast-icon');
         
         const icons = {
-            'capture': '...',
-            'analyzing': '...',
-            'complete': '완료',
-            'error': '오류',
-            'info': 'i'
+            'capture': '📸',
+            'analyzing': '🤖',
+            'complete': '✅',
+            'error': '❌',
+            'info': 'ℹ️'
         };
         iconEl.textContent = icons[type] || icons.info;
         
@@ -51,104 +51,55 @@ const toast = new ToastNotification();
 
 const SITE_CONFIGS = {
     'wanted.co.kr': {
-        jobContainer: '[class*="JobDescription"], article, main',
-        printButton: 'button[aria-label*="인쇄"], button[title*="인쇄"], [class*="print"]',
-        endMarkers: [
-            '[class*="ApplyButton"]',
-            '[class*="ShareButton"]',
-            '[class*="SimilarJob"]',
-            '[class*="RelatedPosition"]'
-        ],
-        hideSelectors: [
+        removeSelectors: [
             '[class*="RelatedPosition"]',
             '[class*="RecommendPosition"]',
             '[class*="SimilarJob"]',
             '[class*="recommend"]',
             '[class*="related"]',
             'footer',
-            '[class*="Footer"]'
-        ],
-        metadataSelectors: {
-            company: '[class*="CompanyName"], [class*="company-name"], h2',
-            title: '[class*="JobHeader"] h1, [class*="job-title"], h1',
-            salary: '[class*="salary"], [class*="Salary"]',
-            location: '[class*="location"], [class*="Location"]',
-            deadline: '[class*="deadline"], [class*="Deadline"]',
-            company_description: '[class*="CompanyDescription"], [class*="company-info"]',
-            employee_count: '[class*="employee"]'
-        }
+            '[class*="Footer"]',
+            'header',
+            'nav'
+        ]
     },
     'jobkorea.co.kr': {
-        jobContainer: '.jobView-content, .job-content, article, main',
-        printButton: '.btn_print, button[onclick*="print"]',
-        endMarkers: [
-            '.btnApply',
-            '.applyBtn',
-            '.sameWork',
-            '.relateWork'
-        ],
-        hideSelectors: [
+        removeSelectors: [
             '.sameWork',
             '.relateWork',
             '#sameCompanyArea',
             '.footer',
-            '#footer'
-        ],
-        metadataSelectors: {
-            company: '.coName, .company-name',
-            title: '.viewTitle, .job-title',
-            salary: '.salary, .pay',
-            location: '.work-place, .location',
-            deadline: '.receiptDate, .deadline',
-            company_description: '.company-info, .company-desc',
-            employee_count: '.employee-count, .member-count'
-        }
+            '#footer',
+            'header',
+            '.header',
+            'nav',
+            '.gnb'
+        ]
     },
     'saramin.co.kr': {
-        jobContainer: '.content, .job_cont, article, main',
-        printButton: '.btn_print, a[href*="print"]',
-        endMarkers: [
-            '.btn_apply',              // 지원 버튼
-            '.jv_cont',                // 채용정보 본문 끝
-            '.jv_summary',             // 요약 정보 끝
-            '.content_bottom',         // 컨텐츠 하단
-            '.related_jobs',           // 추천공고 시작
-            '[class*="HOT100"]',       // HOT100 섹션
-            '[class*="직업전체"]'      // 직업전체 섹션
-        ],
-        hideSelectors: [
+        removeSelectors: [
             '.related_jobs',
             '.recommend_jobs',
             '#footer',
             '.footer',
-            '.jv_link_wrap',          
-            '.content_bottom',        
-            '[class*="HOT100"]',      
-            '[class*="직업전체"]',     
-            '.job_list_wrap',         
-            '#recomm_job_list' 
-        ],
-        metadataSelectors: {
-            company: '.company_name, .comp_name',
-            title: '.job_tit, .title',
-            salary: '.salary',
-            location: '.work_place, .location',
-            deadline: '.deadline, .end_date',
-            company_description: '.company_summary, .company_intro',
-            employee_count: '.employee_num'
-        }
+            '.jv_link_wrap',
+            '.content_bottom',
+            '[class*="HOT100"]',
+            '[class*="직업전체"]',
+            '.job_list_wrap',
+            '#recomm_job_list',
+            'header',
+            '.header',
+            'nav',
+            '.gnb',
+            '.toolbar',
+            '[class*="recommend"]',
+            '[class*="banner"]',
+            '[class*="ad"]'
+        ]
     },
     'default': {
-        jobContainer: 'main, article, [role="main"], .job-content, .content',
-        printButton: 'button[onclick*="print"], .print-btn, [class*="print"]',
-        endMarkers: [
-            '[class*="apply"]',
-            '[class*="Apply"]',
-            '[class*="share"]',
-            '[class*="related"]',
-            '[class*="similar"]'
-        ],
-        hideSelectors: [
+        removeSelectors: [
             '[class*="related"]',
             '[class*="recommend"]',
             '[class*="similar"]',
@@ -157,17 +108,10 @@ const SITE_CONFIGS = {
             '[class*="ad-"]',
             '[class*="advertisement"]',
             'footer',
-            '#footer'
-        ],
-        metadataSelectors: {
-            company: '[class*="company"], [class*="Company"]',
-            title: 'h1, [class*="title"], [class*="Title"]',
-            salary: '[class*="salary"], [class*="pay"]',
-            location: '[class*="location"], [class*="address"]',
-            deadline: '[class*="deadline"]',
-            company_description: '[class*="company-info"], [class*="about"]',
-            employee_count: '[class*="employee"]'
-        }
+            '#footer',
+            'header',
+            'nav'
+        ]
     }
 };
 
@@ -181,191 +125,101 @@ function getSiteConfig() {
     return SITE_CONFIGS.default;
 }
 
-function findJobBoundaries() {
+function removeUnnecessaryElements() {
     const config = getSiteConfig();
+    const removedElements = [];
     
-    let container = null;
-    const containerSelectors = config.jobContainer.split(', ');
+    console.log('[CareerOS] 불필요한 요소 제거 시작');
     
-    for (const selector of containerSelectors) {
-        const el = document.querySelector(selector.trim());
-        if (el && el.offsetHeight > 0) {
-            container = el;
-            break;
-        }
-    }
-    
-    if (!container) {
-        container = document.body;
-    }
-    
-    let endElement = null;
-    let endY = null;
-    
-    for (const selector of config.endMarkers) {
+    config.removeSelectors.forEach(selector => {
         try {
-            const elements = container.querySelectorAll(selector);
-            for (const el of elements) {
-                if (el.offsetHeight > 0) {
-                    const rect = el.getBoundingClientRect();
-                    const elementY = rect.top + window.scrollY;
-                    
-                    if (!endY || elementY < endY) {
-                        endY = elementY;
-                        endElement = el;
-                    }
-                    break;
-                }
-            }
-        } catch (e) {
-            console.log('끝 마커 검색 오류:', selector);
-        }
-    }
-    
-    const containerRect = container.getBoundingClientRect();
-    const containerTop = containerRect.top + window.scrollY;
-    
-    let containerHeight;
-    if (endY && endY > containerTop) {
-        containerHeight = endY - containerTop;
-        console.log('[CareerOS] 끝 마커 발견:', endElement?.className);
-    } else {
-        // 끝 마커 없으면 최대 5화면으로 제한
-        containerHeight = Math.min(container.scrollHeight, window.innerHeight * 5);
-        console.log('[CareerOS] 끝 마커 없음, 5화면으로 제한');
-    }
-    
-    // 제한: 최소 1화면, 최대 5화면
-    containerHeight = Math.min(containerHeight, window.innerHeight * 5);
-    containerHeight = Math.max(containerHeight, window.innerHeight);
-    
-    return {
-        container: container,
-        containerTop: containerTop,
-        containerHeight: containerHeight
-    };
-}
-
-function hideUnnecessaryElements() {
-    const config = getSiteConfig();
-    const hiddenElements = [];
-    
-    // 사람인의 경우 .related_jobs, .recommend_jobs 등을 명확히 타겟팅
-    const selectorsToHide = [
-        ...config.hideSelectors,
-        '.related_jobs', '.recommend_jobs', '#footer', '.jv_link_wrap', '.content_bottom'
-    ];
-    
-    selectorsToHide.forEach(selector => {
-        try {
-            document.querySelectorAll(selector).forEach(el => {
-                if (el && el.style.display !== 'none') {
-                    hiddenElements.push({ element: el, originalDisplay: el.style.display });
-                    el.style.display = 'none'; // PDF 생성 전 노이즈 제거
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+                if (el && el.parentNode) {
+                    // 복원용 정보 저장
+                    removedElements.push({
+                        element: el,
+                        parent: el.parentNode,
+                        nextSibling: el.nextSibling
+                    });
+                    // DOM에서 완전 제거
+                    el.parentNode.removeChild(el);
                 }
             });
-        } catch (e) { console.log('차단 실패:', selector); }
+            if (elements.length > 0) {
+                console.log(`[CareerOS] 제거됨: ${selector} (${elements.length}개)`);
+            }
+        } catch (e) {
+            console.log(`[CareerOS] 제거 실패: ${selector}`, e);
+        }
     });
-    return hiddenElements;
+    
+    console.log(`[CareerOS] 총 ${removedElements.length}개 요소 제거 완료`);
+    return removedElements;
 }
 
-function restoreElements(hiddenElements) {
-    hiddenElements.forEach(({ element, originalDisplay }) => {
-        element.style.display = originalDisplay;
+function restoreElements(removedElements) {
+    console.log('[CareerOS] 요소 복원 시작');
+    removedElements.forEach(({ element, parent, nextSibling }) => {
+        try {
+            if (nextSibling) {
+                parent.insertBefore(element, nextSibling);
+            } else {
+                parent.appendChild(element);
+            }
+        } catch (e) {
+            console.log('[CareerOS] 복원 실패:', e);
+        }
     });
+    console.log('[CareerOS] 복원 완료');
 }
 
 function extractMetadata() {
-    const config = getSiteConfig();
     const metadata = {
         url: window.location.href,
         captured_at: new Date().toISOString(),
+        title: document.title,
         company: null,
-        title: null,
-        salary: null,
-        location: null,
-        deadline: null,
-        company_description: null,
-        employee_count: null,
         raw_text: null
     };
     
-    for (const [field, selector] of Object.entries(config.metadataSelectors)) {
-        try {
-            const selectors = selector.split(', ');
-            for (const sel of selectors) {
-                const el = document.querySelector(sel.trim());
-                if (el && el.textContent.trim()) {
-                    let text = el.textContent.trim();
-                    
-                    if (field === 'company_description') {
-                        metadata[field] = text.substring(0, 1000);
-                    } else {
-                        metadata[field] = text.substring(0, 200);
-                    }
-                    break;
-                }
-            }
-        } catch (e) {
-            console.log('메타데이터 추출 오류:', field);
-        }
+    // 간단한 회사명 추출
+    const titleParts = document.title.split(/[|\-\–]/);
+    if (titleParts.length > 0) {
+        metadata.company = titleParts[0].trim();
     }
     
-    try {
-        const { container } = findJobBoundaries();
-        if (container) {
-            metadata.raw_text = container.textContent
-                .replace(/\s+/g, ' ')
-                .trim()
-                .substring(0, 5000);
-        }
-    } catch (e) {
-        console.log('전체 텍스트 추출 오류');
+    // 페이지 텍스트 추출 (본문만)
+    const mainContent = document.querySelector('main, article, .content, [role="main"]');
+    if (mainContent) {
+        metadata.raw_text = mainContent.textContent
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 5000);
     }
     
     return metadata;
 }
 
-function getJobContainerInfo() {
-    const { containerTop, containerHeight } = findJobBoundaries();
-    const viewportHeight = window.innerHeight;
-    
-    const captureCount = Math.ceil(containerHeight / viewportHeight);
-    const limitedCount = Math.min(captureCount, 3); // 10 → 3으로 축소
-    
-    console.log(`[CareerOS] 캡처 계획: ${limitedCount}개 화면 (${Math.round(containerHeight)}px)`);
-    
-    return {
-        containerTop: containerTop,
-        containerHeight: containerHeight,
-        viewportHeight: viewportHeight,
-        captureCount: limitedCount,
-        totalHeight: Math.max(
-            document.body.scrollHeight,
-            document.documentElement.scrollHeight
-        ),
-        currentScrollY: window.scrollY
-    };
-}
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'PREPARE_CAPTURE') {
-        toast.show('준비 중...', 'capture');
+        console.log('[CareerOS] PREPARE_CAPTURE 시작');
+        toast.show('페이지 정리 중...', 'capture');
         
-        const hiddenElements = hideUnnecessaryElements();
+        const removedElements = removeUnnecessaryElements();
         const metadata = extractMetadata();
-        const containerInfo = getJobContainerInfo();
         
         sendResponse({
             success: true,
             metadata: metadata,
-            pageInfo: containerInfo,
-            hiddenCount: hiddenElements.length
+            removedCount: removedElements.length
         });
         
+        // 5초 후 자동 복원 (PDF 생성 완료 후)
         setTimeout(() => {
-            restoreElements(hiddenElements);
-        }, 10000); // 10초로 연장
+            restoreElements(removedElements);
+            console.log('[CareerOS] 자동 복원 완료');
+        }, 5000);
         
         return true;
     }
@@ -378,12 +232,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     if (request.action === 'HIDE_TOAST') {
         toast.hide();
-        sendResponse({ success: true });
-        return true;
-    }
-    
-    if (request.action === 'SCROLL_TO') {
-        window.scrollTo(0, request.position);
         sendResponse({ success: true });
         return true;
     }
