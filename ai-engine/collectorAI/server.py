@@ -5,14 +5,16 @@ import io
 import threading
 import queue
 import uuid
-import asyncio
+import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 from datetime import datetime
 from PIL import Image
-import fitz  # PyMuPDF
-from pyppeteer import launch
+import fitz
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from config import IMAGE_CONFIG, MODEL_CONFIG, get_analysis_prompt
 
 app = Flask(__name__)
@@ -21,9 +23,8 @@ CORS(app)
 SAVE_DIR = "/app/data"
 IMAGE_DIR = "/app/data/images"
 PDF_DIR = "/app/data/pdfs"
-for directory in [SAVE_DIR, IMAGE_DIR, PDF_DIR]:
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+for d in [SAVE_DIR, IMAGE_DIR, PDF_DIR]:
+    os.makedirs(d, exist_ok=True)
 
 OLLAMA_URL = "http://host.docker.internal:11434/api/generate"
 
@@ -31,65 +32,51 @@ job_queue = queue.Queue()
 job_results = {}
 job_lock = threading.Lock()
 
-async def generate_pdf_from_url(url, output_path):
-    """Puppeteer PDF 생성"""
-    browser = None
+def generate_pdf_from_url(url, output_path):
+    """Selenium PDF 생성 (동기, 스레드 안전)"""
+    driver = None
     try:
-        print(f"[Puppeteer] 1. Launch 시작")
-        browser = await launch({
-            'headless': True,
-            'executablePath': '/usr/bin/chromium',
-            'args': [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--disable-extensions'
-            ]
-        })
-        print(f"[Puppeteer] 2. Launch 완료")
+        print(f"[Selenium] 시작: {url[:50]}...")
         
-        page = await browser.newPage()
-        print(f"[Puppeteer] 3. Page 생성")
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.binary_location = '/usr/bin/chromium'
         
-        await page.setViewport({'width': 1280, 'height': 1024})
+        service = Service('/usr/bin/chromedriver')
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         
-        print(f"[Puppeteer] 4. 페이지 이동: {url[:50]}...")
-        await page.goto(url, {
-            'waitUntil': 'networkidle0',
-            'timeout': 60000
-        })
-        print(f"[Puppeteer] 5. 페이지 로드 완료")
+        print(f"[Selenium] 페이지 로드")
+        driver.get(url)
+        time.sleep(3)  # 동적 콘텐츠 대기
         
-        await asyncio.sleep(2)
-        
-        print(f"[Puppeteer] 6. PDF 생성 시작")
-        await page.pdf({
-            'path': output_path,
-            'format': 'A4',
+        print(f"[Selenium] PDF 생성")
+        pdf_settings = {
+            'landscape': False,
+            'displayHeaderFooter': False,
             'printBackground': True,
-            'margin': {
-                'top': '5mm',
-                'right': '5mm',
-                'bottom': '5mm',
-                'left': '5mm'
-            }
-        })
+            'preferCSSPageSize': True,
+        }
         
-        await browser.close()
+        pdf_data = driver.execute_cdp_cmd('Page.printToPDF', pdf_settings)
+        pdf_bytes = base64.b64decode(pdf_data['data'])
         
-        size = os.path.getsize(output_path) // 1024
-        print(f"[Puppeteer] 7. 완료: {size}KB")
+        with open(output_path, 'wb') as f:
+            f.write(pdf_bytes)
+        
+        driver.quit()
+        
+        size_kb = len(pdf_bytes) // 1024
+        print(f"[Selenium] 완료: {size_kb}KB")
         return True
         
     except Exception as e:
-        print(f"[Puppeteer] 오류: {e}")
-        import traceback
-        traceback.print_exc()
-        if browser:
+        print(f"[Selenium] 오류: {e}")
+        if driver:
             try:
-                await browser.close()
+                driver.quit()
             except:
                 pass
         return False
@@ -97,11 +84,11 @@ async def generate_pdf_from_url(url, output_path):
 def pdf_to_images(pdf_path):
     """PDF → 이미지"""
     try:
-        pdf_doc = fitz.open(pdf_path)
+        doc = fitz.open(pdf_path)
         images = []
         
-        for page_num in range(len(pdf_doc)):
-            page = pdf_doc[page_num]
+        for page_num in range(len(doc)):
+            page = doc[page_num]
             mat = fitz.Matrix(2.0, 2.0)
             pix = page.get_pixmap(matrix=mat)
             
@@ -109,89 +96,84 @@ def pdf_to_images(pdf_path):
             
             if img.width > IMAGE_CONFIG["MAX_WIDTH"]:
                 ratio = IMAGE_CONFIG["MAX_WIDTH"] / img.width
-                new_height = int(img.height * ratio)
-                img = img.resize((IMAGE_CONFIG["MAX_WIDTH"], new_height), Image.Resampling.LANCZOS)
+                new_h = int(img.height * ratio)
+                img = img.resize((IMAGE_CONFIG["MAX_WIDTH"], new_h), Image.Resampling.LANCZOS)
             
-            buffer = io.BytesIO()
-            img.save(buffer, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
-            images.append(base64.b64encode(buffer.getvalue()).decode('utf-8'))
+            buf = io.BytesIO()
+            img.save(buf, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
+            images.append(base64.b64encode(buf.getvalue()).decode('utf-8'))
         
-        pdf_doc.close()
+        doc.close()
         print(f"[서버] PDF → {len(images)}페이지")
         return images
         
     except Exception as e:
-        print(f"[서버] PDF 변환 오류: {e}")
+        print(f"[서버] 변환 오류: {e}")
         return None
 
-def merge_images_vertically(base64_images, save_path=None):
+def merge_images_vertically(images, save_path=None):
     """이미지 병합"""
-    if not base64_images:
+    if not images:
         return None
     
-    if len(base64_images) == 1:
+    if len(images) == 1:
         if save_path:
-            save_image(base64_images[0], save_path)
-        return base64_images[0]
+            img_data = base64.b64decode(images[0])
+            with open(save_path, 'wb') as f:
+                f.write(img_data)
+        return images[0]
     
     try:
-        images = []
-        max_width = 0
+        pil_images = []
+        max_w = 0
         
-        for b64 in base64_images:
-            img_data = base64.b64decode(b64)
-            img = Image.open(io.BytesIO(img_data))
+        for b64 in images:
+            data = base64.b64decode(b64)
+            img = Image.open(io.BytesIO(data))
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            images.append(img)
-            max_width = max(max_width, img.width)
+            pil_images.append(img)
+            max_w = max(max_w, img.width)
         
-        target_width = min(max_width, IMAGE_CONFIG["MAX_WIDTH"])
+        target_w = min(max_w, IMAGE_CONFIG["MAX_WIDTH"])
         
         resized = []
-        total_height = 0
+        total_h = 0
         
-        for img in images:
-            ratio = target_width / img.width
-            new_height = int(img.height * ratio)
-            r = img.resize((target_width, new_height), Image.Resampling.LANCZOS)
+        for img in pil_images:
+            ratio = target_w / img.width
+            new_h = int(img.height * ratio)
+            r = img.resize((target_w, new_h), Image.Resampling.LANCZOS)
             resized.append(r)
-            total_height += new_height
+            total_h += new_h
         
-        merged = Image.new('RGB', (target_width, total_height), (255, 255, 255))
+        merged = Image.new('RGB', (target_w, total_h), (255, 255, 255))
         
         y = 0
         for img in resized:
             merged.paste(img, (0, y))
             y += img.height
         
-        buffer = io.BytesIO()
-        merged.save(buffer, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
-        merged_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        buf = io.BytesIO()
+        merged.save(buf, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
+        merged_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
         
         if save_path:
             merged.save(save_path, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
         
-        print(f"[서버] 병합: {target_width}x{total_height}px")
+        print(f"[서버] 병합: {target_w}x{total_h}px")
         return merged_b64
         
     except Exception as e:
         print(f"[서버] 병합 오류: {e}")
-        return base64_images[0] if base64_images else None
-
-def save_image(base64_str, filepath):
-    try:
-        img_data = base64.b64decode(base64_str)
-        img = Image.open(io.BytesIO(img_data))
-        img.save(filepath, format=IMAGE_CONFIG["FORMAT"], quality=IMAGE_CONFIG["QUALITY"])
-    except Exception as e:
-        print(f"[서버] 저장 오류: {e}")
+        return images[0] if images else None
 
 def analyze_with_vision_model(image_base64, prompt):
+    """Ollama OCR"""
     try:
-        print(f"[Ollama] 요청 전송")
+        print(f"[Ollama] 요청")
         
-        response = requests.post(OLLAMA_URL, json={
+        resp = requests.post(OLLAMA_URL, json={
             "model": MODEL_CONFIG["MODEL_NAME"],
             "prompt": prompt,
             "images": [image_base64],
@@ -203,11 +185,11 @@ def analyze_with_vision_model(image_base64, prompt):
             }
         }, timeout=MODEL_CONFIG["TIMEOUT"])
         
-        if response.status_code != 200:
-            print(f"[Ollama] 실패: {response.status_code}")
+        if resp.status_code != 200:
+            print(f"[Ollama] 실패: {resp.status_code}")
             return None
         
-        result = response.json()
+        result = resp.json()
         clean = result['response'].replace("```json", "").replace("```", "").strip()
         return json.loads(clean)
         
@@ -216,54 +198,47 @@ def analyze_with_vision_model(image_base64, prompt):
         return None
 
 def infer_industry(data):
-    company_info = data.get("company_info", {})
-    job_summary = data.get("job_summary", {})
+    """산업 분류"""
+    ci = data.get("company_info", {})
+    js = data.get("job_summary", {})
     
-    company = (company_info.get("name") or job_summary.get("company") or "").lower()
-    title = (job_summary.get("title") or "").lower()
-    text = company + " " + title
+    text = (ci.get("name", "") + " " + js.get("company", "") + " " + js.get("title", "")).lower()
     
-    keywords = {
-        "IT/소프트웨어": ["소프트웨어", "it", "개발", "테크", "시스템", "데이터"],
+    kw = {
+        "IT/소프트웨어": ["소프트웨어", "it", "개발", "시스템", "데이터"],
         "금융": ["은행", "금융", "증권", "보험"],
-        "제조": ["제조", "공장", "생산"],
+        "제조": ["제조", "공장"],
         "유통": ["유통", "물류"],
-        "의료": ["병원", "의료", "제약"],
+        "의료": ["병원", "의료"],
         "교육": ["학교", "교육"],
-        "건설": ["건설", "건축"],
-        "미디어": ["디자인", "광고", "미디어"],
+        "건설": ["건설"],
+        "미디어": ["디자인", "광고"],
     }
     
-    for industry, kws in keywords.items():
-        if any(kw in text for kw in kws):
-            return industry
+    for ind, kws in kw.items():
+        if any(k in text for k in kws):
+            return ind
     
     return "서비스"
 
 def process_job(job_id, url, metadata):
+    """작업 처리 (스레드 안전)"""
     try:
         print(f"[워커 {job_id[:8]}] 시작")
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         company = metadata.get('company', 'unknown').replace('/', '_')[:30]
         
-        pdf_file = f"{company}_{timestamp}.pdf"
+        pdf_file = f"{company}_{ts}.pdf"
         pdf_path = os.path.join(PDF_DIR, pdf_file)
         
-        # PDF 생성
-        print(f"[워커 {job_id[:8]}] PDF 생성 시작")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        success = loop.run_until_complete(generate_pdf_from_url(url, pdf_path))
-        loop.close()
-        
-        if not success:
+        # PDF 생성 (동기)
+        if not generate_pdf_from_url(url, pdf_path):
             with job_lock:
-                job_results[job_id] = {"status": "error", "message": "PDF 생성 실패"}
+                job_results[job_id] = {"status": "error", "message": "PDF 실패"}
             return
         
-        # PDF → 이미지
-        print(f"[워커 {job_id[:8]}] PDF 변환")
+        # 변환
         images = pdf_to_images(pdf_path)
         if not images:
             with job_lock:
@@ -271,7 +246,7 @@ def process_job(job_id, url, metadata):
             return
         
         # 병합
-        img_file = f"{company}_{timestamp}.jpg"
+        img_file = f"{company}_{ts}.jpg"
         img_path = os.path.join(IMAGE_DIR, img_file)
         merged = merge_images_vertically(images, save_path=img_path)
         
@@ -284,7 +259,7 @@ def process_job(job_id, url, metadata):
         today = datetime.now().strftime("%Y-%m-%d")
         prompt = get_analysis_prompt(url, today, metadata)
         
-        print(f"[워커 {job_id[:8]}] AI 분석")
+        print(f"[워커 {job_id[:8]}] 분석")
         data = analyze_with_vision_model(merged, prompt)
         
         if not data:
@@ -308,12 +283,10 @@ def process_job(job_id, url, metadata):
                 data["analysis"]["working_conditions"]["salary"] = "회사 내규에 따름"
         
         # 저장
-        comp = data.get('company_info', {}).get('name') or \
-               data.get('job_summary', {}).get('company', 'Unknown')
+        comp = data.get('company_info', {}).get('name') or data.get('job_summary', {}).get('company', 'Unknown')
         title = data.get('job_summary', {}).get('title', 'Job')
-        safe = "".join([c if c.isalnum() or c in (' ', '_', '-') else '_' 
-                        for c in f"{comp}_{title}"])
-        json_file = f"{safe}_{timestamp}.json"
+        safe = "".join([c if c.isalnum() or c in (' ', '_', '-') else '_' for c in f"{comp}_{title}"])
+        json_file = f"{safe}_{ts}.json"
         
         json_path = os.path.join(SAVE_DIR, json_file)
         with open(json_path, 'w', encoding='utf-8') as f:
@@ -338,30 +311,30 @@ def process_job(job_id, url, metadata):
             job_results[job_id] = {"status": "error", "message": str(e)}
 
 def worker():
+    """백그라운드 워커"""
     while True:
         try:
             job_id, url, metadata = job_queue.get()
             process_job(job_id, url, metadata)
             job_queue.task_done()
         except Exception as e:
-            print(f"[워커] 치명적 오류: {e}")
+            print(f"[워커] 오류: {e}")
 
 worker_thread = threading.Thread(target=worker, daemon=True)
 worker_thread.start()
 
 @app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
+def health():
+    return jsonify({"status": "ok"})
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.json
-    
     url = data.get('url', '')
     metadata = data.get('metadata', {})
     
     if not url:
-        return jsonify({"status": "error", "message": "URL 필요"}), 400
+        return jsonify({"error": "URL 필요"}), 400
     
     job_id = str(uuid.uuid4())
     
@@ -369,18 +342,17 @@ def analyze():
         job_results[job_id] = {"status": "queued"}
     
     job_queue.put((job_id, url, metadata))
-    
-    print(f"[서버] 작업 {job_id[:8]} 등록")
+    print(f"[서버] 등록: {job_id[:8]}")
     
     return jsonify({"status": "queued", "job_id": job_id})
 
 @app.route('/status/<job_id>', methods=['GET'])
-def get_status(job_id):
+def status(job_id):
     with job_lock:
         result = job_results.get(job_id)
     
     if not result:
-        return jsonify({"status": "error", "message": "없음"}), 404
+        return jsonify({"error": "없음"}), 404
     
     return jsonify(result)
 
