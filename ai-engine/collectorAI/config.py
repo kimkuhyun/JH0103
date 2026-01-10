@@ -7,7 +7,7 @@ IMAGE_CONFIG = {
     "MAX_WIDTH": 800,
     "QUALITY": 75,
     "FORMAT": "JPEG",
-    "MAX_CAPTURES": 5
+    "MAX_CAPTURES": 10  # 5 -> 10으로 증가
 }
 
 # 모델 설정
