@@ -11,7 +11,7 @@ IMAGE_CONFIG = {
 
 # 모델 설정
 MODEL_CONFIG = {
-    "MODEL_NAME": "qwen2.5vl:3b",
+    "MODEL_NAME": "llama3.2-vision",
     "NUM_CTX": 8192,    # 컨텍스트 윈도우 확대 (이미지 병합용)
     "TEMPERATURE": 0
 }
