@@ -42,10 +42,16 @@ async function startOneClickCapture() {
             throw new Error('페이지 준비 실패');
         }
         
-        const { metadata, pageInfo } = prepareResult;
+        const { metadata } = prepareResult;
         
-        await showToast(tabId, '페이지 캡처 중, 잠시만 기다려주세요', 'capture');
-        const images = await captureJobPosting(tabId, pageInfo);
+        await showToast(tabId, 'PDF 생성 중...', 'capture');
+        
+        // PDF 생성
+        const pdfData = await capturePDF(tabId);
+        
+        if (!pdfData) {
+            throw new Error('PDF 생성 실패');
+        }
         
         await showToast(tabId, 'AI 분석 중, 다른 탭으로 이동 가능', 'analyzing');
         
@@ -55,12 +61,11 @@ async function startOneClickCapture() {
             url: tab.url,
             status: 'PROCESSING',
             metadata: metadata,
-            images: images
+            pdf: pdfData
         };
         
         await saveJob(job);
         
-        // 작업 제출 및 폴링
         const result = await submitAndPoll(job);
         
         if (result.success) {
@@ -79,60 +84,45 @@ async function startOneClickCapture() {
     }
 }
 
-async function captureJobPosting(tabId, pageInfo) {
-    const images = [];
-    const { containerTop, containerHeight, viewportHeight, captureCount, currentScrollY } = pageInfo;
-    
-    console.log(`캡처 계획: ${captureCount}개 이미지, 높이: ${containerHeight}px`);
-    
-    await chrome.tabs.sendMessage(tabId, { 
-        action: 'SCROLL_TO', 
-        position: containerTop 
-    });
-    await sleep(500);
-    
-    for (let i = 0; i < captureCount; i++) {
-        const scrollPosition = containerTop + (i * viewportHeight);
-        
-        if (scrollPosition > containerTop + containerHeight) {
-            break;
-        }
-        
-        await chrome.tabs.sendMessage(tabId, { 
-            action: 'SCROLL_TO', 
-            position: scrollPosition 
+async function capturePDF(tabId) {
+    try {
+        // Chrome의 PDF 생성 API 사용
+        const pdfBlob = await chrome.tabs.printToPDF(tabId, {
+            paperFormat: 'A4',
+            marginTop: 0,
+            marginBottom: 0,
+            marginLeft: 0,
+            marginRight: 0,
+            printBackground: true,
+            preferCSSPageSize: false
         });
-        await sleep(400);
         
-        try {
-            const currentTab = await chrome.tabs.get(tabId);
-            const dataUrl = await chrome.tabs.captureVisibleTab(currentTab.windowId, { 
-                format: 'png' 
-            });
-            images.push(dataUrl.split(',')[1]);
-        } catch (e) {
-            console.error('캡처 실패 위치:', scrollPosition, e);
-        }
+        // Blob을 base64로 변환
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+            reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                console.log(`PDF 생성 완료: ${Math.round(pdfBlob.size / 1024)}KB`);
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(new Blob([pdfBlob], { type: 'application/pdf' }));
+        });
+        
+    } catch (error) {
+        console.error('PDF 생성 실패:', error);
+        return null;
     }
-    
-    await chrome.tabs.sendMessage(tabId, { 
-        action: 'SCROLL_TO', 
-        position: currentScrollY 
-    });
-    
-    console.log(`캡처 완료: ${images.length}개 이미지`);
-    return images;
 }
 
 async function submitAndPoll(job) {
     try {
-        // 작업 제출
         const submitResponse = await fetch(API_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 url: job.url,
-                images: job.images,
+                pdf: job.pdf,  // images 대신 pdf
                 metadata: job.metadata
             })
         });
@@ -144,7 +134,6 @@ async function submitAndPoll(job) {
         
         const { job_id } = await submitResponse.json();
         
-        // 결과 폴링 (최대 60회 x 2초 = 2분)
         const maxAttempts = 60;
         let attempts = 0;
         
