@@ -12,9 +12,6 @@ import requests
 from datetime import datetime
 from PIL import Image
 import fitz
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from config import IMAGE_CONFIG, MODEL_CONFIG, get_analysis_prompt
 
 app = Flask(__name__)
@@ -27,10 +24,32 @@ for d in [SAVE_DIR, IMAGE_DIR, PDF_DIR]:
     os.makedirs(d, exist_ok=True)
 
 OLLAMA_URL = "http://host.docker.internal:11434/api/generate"
+OLLAMA_TAGS_URL = "http://host.docker.internal:11434/api/tags"
 
 job_queue = queue.Queue()
 job_results = {}
 job_lock = threading.Lock()
+
+def check_ollama_connection():
+    """Ollama 서버 연결 상태 확인"""
+    try:
+        resp = requests.get(OLLAMA_TAGS_URL, timeout=5)
+        if resp.status_code == 200:
+            models = resp.json().get('models', [])
+            model_names = [m['name'] for m in models]
+            has_target = any(MODEL_CONFIG["MODEL_NAME"] in name for name in model_names)
+            return {
+                "connected": True,
+                "models": model_names,
+                "target_model_available": has_target
+            }
+        return {"connected": False, "error": f"상태 코드: {resp.status_code}"}
+    except requests.exceptions.ConnectionError:
+        return {"connected": False, "error": "Ollama 서버에 연결할 수 없습니다."}
+    except requests.exceptions.Timeout:
+        return {"connected": False, "error": "연결 시간 초과"}
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
 
 def save_pdf_from_extension(pdf_base64, output_path):
     """익스텐션에서 보낸 Base64 데이터를 PDF 파일로 저장"""
@@ -130,61 +149,79 @@ def merge_images_vertically(images, save_path=None):
         print(f"[서버] 병합 오류: {e}")
         return images[0] if images else None
 
-def analyze_with_vision_model(image_base64, prompt):
-    """Ollama OCR"""
-    try:
-        print(f"[Ollama] 요청")
-        
-        resp = requests.post(OLLAMA_URL, json={
-            "model": MODEL_CONFIG["MODEL_NAME"],
-            "prompt": prompt,
-            "images": [image_base64],
-            "format": "json",
-            "stream": False,
-            "options": {
-                "num_ctx": MODEL_CONFIG["NUM_CTX"],
-                "temperature": MODEL_CONFIG["TEMPERATURE"]
-            }
-        }, timeout=MODEL_CONFIG["TIMEOUT"])
-        
-        if resp.status_code != 200:
-            print(f"[Ollama] 실패: {resp.status_code}")
-            return None
-        
-        result = resp.json()
-        clean = result['response'].replace("```json", "").replace("```", "").strip()
-        return json.loads(clean)
-        
-    except Exception as e:
-        print(f"[Ollama] 오류: {e}")
-        return None
-
-def infer_industry(data):
-    """산업 분류"""
-    ci = data.get("company_info", {})
-    js = data.get("job_summary", {})
+def analyze_with_vision_model(image_base64, prompt, max_retries=2):
+    """Ollama 비전 모델 분석 (재시도 로직 포함)"""
     
-    text = (ci.get("name", "") + " " + js.get("company", "") + " " + js.get("title", "")).lower()
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                print(f"[Ollama] 재시도 {attempt}/{max_retries-1}")
+                time.sleep(2)
+            
+            print(f"[Ollama] 요청 시작 (모델: {MODEL_CONFIG['MODEL_NAME']})")
+            
+            resp = requests.post(OLLAMA_URL, json={
+                "model": MODEL_CONFIG["MODEL_NAME"],
+                "prompt": prompt,
+                "images": [image_base64],
+                "format": "json",
+                "stream": False,
+                "options": {
+                    "num_ctx": MODEL_CONFIG["NUM_CTX"],
+                    "temperature": MODEL_CONFIG["TEMPERATURE"]
+                }
+            }, timeout=MODEL_CONFIG["TIMEOUT"])
+            
+            if resp.status_code != 200:
+                error_msg = f"HTTP {resp.status_code}"
+                try:
+                    error_detail = resp.json()
+                    error_msg += f": {error_detail.get('error', resp.text[:200])}"
+                except:
+                    error_msg += f": {resp.text[:200]}"
+                
+                print(f"[Ollama] 실패: {error_msg}")
+                
+                if attempt == max_retries - 1:
+                    return None, error_msg
+                continue
+            
+            result = resp.json()
+            clean = result['response'].replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(clean)
+            print(f"[Ollama] 성공")
+            return parsed, None
+            
+        except requests.exceptions.ConnectionError as e:
+            error_msg = "Ollama 서버 연결 실패. Ollama가 실행 중인지 확인하세요."
+            print(f"[Ollama] {error_msg}")
+            if attempt == max_retries - 1:
+                return None, error_msg
+                
+        except requests.exceptions.Timeout as e:
+            error_msg = f"요청 시간 초과 ({MODEL_CONFIG['TIMEOUT']}초). 모델이 너무 느리거나 이미지가 복잡합니다."
+            print(f"[Ollama] {error_msg}")
+            if attempt == max_retries - 1:
+                return None, error_msg
+                
+        except json.JSONDecodeError as e:
+            error_msg = f"JSON 파싱 실패. 모델 응답이 올바르지 않습니다: {str(e)}"
+            print(f"[Ollama] {error_msg}")
+            if attempt == max_retries - 1:
+                return None, error_msg
+                
+        except Exception as e:
+            error_msg = f"알 수 없는 오류: {type(e).__name__}: {str(e)}"
+            print(f"[Ollama] {error_msg}")
+            import traceback
+            traceback.print_exc()
+            if attempt == max_retries - 1:
+                return None, error_msg
     
-    kw = {
-        "IT/소프트웨어": ["소프트웨어", "it", "개발", "시스템", "데이터"],
-        "금융": ["은행", "금융", "증권", "보험"],
-        "제조": ["제조", "공장"],
-        "유통": ["유통", "물류"],
-        "의료": ["병원", "의료"],
-        "교육": ["학교", "교육"],
-        "건설": ["건설"],
-        "미디어": ["디자인", "광고"],
-    }
-    
-    for ind, kws in kw.items():
-        if any(k in text for k in kws):
-            return ind
-    
-    return "서비스"
+    return None, "최대 재시도 횟수 초과"
 
 def extract_text_from_pdf(pdf_path):
-    """PDF에서 순수 텍스트를 추출하여 AI의 OCR 부담을 줄임"""
+    """PDF에서 순수 텍스트 추출"""
     try:
         doc = fitz.open(pdf_path)
         text = ""
@@ -195,6 +232,7 @@ def extract_text_from_pdf(pdf_path):
     except Exception as e:
         print(f"[서버] 텍스트 추출 오류: {e}")
         return ""
+
 def process_job(job_id, pdf_data, url, metadata):
     try:
         print(f"[워커 {job_id[:8]}] 시작")
@@ -204,19 +242,29 @@ def process_job(job_id, pdf_data, url, metadata):
         pdf_file = f"{company}_{ts}.pdf"
         pdf_path = os.path.join(PDF_DIR, pdf_file)
         
+        # 1. PDF 저장
         if not save_pdf_from_extension(pdf_data, pdf_path):
             with job_lock:
-                job_results[job_id] = {"status": "error", "message": "PDF 저장 실패"}
+                job_results[job_id] = {
+                    "status": "error", 
+                    "message": "PDF 저장 실패",
+                    "error_type": "save_failed"
+                }
             return
 
-        # 1. [추가] PDF에서 순수 텍스트 먼저 추출 (AI 정확도 향상의 핵심)
+        # 2. 텍스트 추출
         raw_text = extract_text_from_pdf(pdf_path)
 
-        # 2. 이미지 변환 (비전 모델의 레이아웃 파악용)
+        # 3. 이미지 변환
         images = pdf_to_images(pdf_path)
         if not images:
             with job_lock:
-                job_results[job_id] = {"status": "error", "message": "변환 실패"}
+                job_results[job_id] = {
+                    "status": "error", 
+                    "message": "PDF를 이미지로 변환 실패",
+                    "error_type": "conversion_failed",
+                    "pdf": pdf_file
+                }
             return
         
         img_file = f"{company}_{ts}.jpg"
@@ -225,38 +273,45 @@ def process_job(job_id, pdf_data, url, metadata):
         
         if not merged:
             with job_lock:
-                job_results[job_id] = {"status": "error", "message": "병합 실패"}
+                job_results[job_id] = {
+                    "status": "error", 
+                    "message": "이미지 병합 실패",
+                    "error_type": "merge_failed",
+                    "pdf": pdf_file
+                }
             return
         
-        # 3. [수정] 프롬프트 강화: 추출된 텍스트를 프롬프트에 포함
+        # 4. 프롬프트 생성
         today = datetime.now().strftime("%Y-%m-%d")
         base_prompt = get_analysis_prompt(url, today, metadata)
         
-        # 라마 3.2 비전 모델이 텍스트 소스를 참고하도록 유도
         enhanced_prompt = f"""
-        {base_prompt}
+{base_prompt}
+
+[가장 중요: 아래의 추출된 텍스트를 최우선으로 참고하여 분석하세요]
+텍스트 소스:
+{raw_text[:4000]} 
+
+[주의] 이미지 하단의 '추천 공고'나 '관련 공고' 정보는 무시하고, 상단의 본문 채용 정보만 분석하세요.
+"""
         
-        [가장 중요: 아래의 추출된 텍스트를 최우선으로 참고하여 분석하세요]
-        텍스트 소스:
-        {raw_text[:4000]} 
-        
-        [주의] 이미지 하단의 '추천 공고'나 '관련 공고' 정보는 무시하고, 상단의 본문 채용 정보만 분석하세요.
-        """
-        
-        print(f"[워커 {job_id[:8]}]  비전 분석 실행 (텍스트 포함)")
-        data = analyze_with_vision_model(merged, enhanced_prompt)
+        # 5. AI 분석
+        print(f"[워커 {job_id[:8]}] Ollama 요청")
+        data, error = analyze_with_vision_model(merged, enhanced_prompt)
         
         if not data:
             with job_lock:
                 job_results[job_id] = {
                     "status": "error",
-                    "message": "분석 실패 (타임아웃 가능성)",
+                    "message": error or "AI 분석 실패",
+                    "error_type": "analysis_failed",
                     "pdf": pdf_file,
-                    "image": img_file
+                    "image": img_file,
+                    "details": "Ollama 연결 또는 모델 실행 문제"
                 }
             return
         
-        # 저장
+        # 6. 결과 저장
         comp = data.get('company_info', {}).get('name') or data.get('job_summary', {}).get('company', 'Unknown')
         title = data.get('job_summary', {}).get('title', 'Job')
         safe = "".join([c if c.isalnum() or c in (' ', '_', '-') else '_' for c in f"{comp}_{title}"])
@@ -278,49 +333,76 @@ def process_job(job_id, pdf_data, url, metadata):
         print(f"[워커 {job_id[:8]}] 완료")
         
     except Exception as e:
-        print(f"[워커 {job_id[:8]}] 오류: {e}")
+        print(f"[워커 {job_id[:8]}] 예외 발생: {e}")
         import traceback
         traceback.print_exc()
         with job_lock:
-            job_results[job_id] = {"status": "error", "message": str(e)}
+            job_results[job_id] = {
+                "status": "error", 
+                "message": f"서버 내부 오류: {str(e)}",
+                "error_type": "internal_error"
+            }
 
-# 서버 코드 하단 worker 부분 수정
 def worker():
     """백그라운드 워커"""
     while True:
         try:
-            # 큐에서 pdf_data까지 4개를 꺼내도록 수정
-            job_id, pdf_data, url, metadata = job_queue.get() 
+            job_id, pdf_data, url, metadata = job_queue.get()
             process_job(job_id, pdf_data, url, metadata)
             job_queue.task_done()
         except Exception as e:
-            print(f"[워커] 오류: {e}")
+            print(f"[워커] 치명적 오류: {e}")
+            import traceback
+            traceback.print_exc()
 
 worker_thread = threading.Thread(target=worker, daemon=True)
 worker_thread.start()
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "ok"})
+    """서버 상태 및 Ollama 연결 확인"""
+    ollama_status = check_ollama_connection()
+    
+    return jsonify({
+        "server": "ok",
+        "ollama": ollama_status,
+        "queue_size": job_queue.qsize(),
+        "model": MODEL_CONFIG["MODEL_NAME"]
+    })
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     data = request.json
     url = data.get('url', '')
-    pdf_data = data.get('pdf')  # 익스텐션이 보낸 base64 PDF 데이터
+    pdf_data = data.get('pdf')
     metadata = data.get('metadata', {})
     
     if not pdf_data:
         return jsonify({"error": "PDF 데이터가 없습니다."}), 400
+    
+    # Ollama 사전 체크
+    ollama_check = check_ollama_connection()
+    if not ollama_check.get("connected"):
+        return jsonify({
+            "error": "Ollama 서버 연결 실패",
+            "details": ollama_check.get("error"),
+            "solution": "Ollama가 실행 중인지 확인하세요: ollama serve"
+        }), 503
+    
+    if not ollama_check.get("target_model_available"):
+        return jsonify({
+            "error": f"모델 '{MODEL_CONFIG['MODEL_NAME']}'을 찾을 수 없습니다",
+            "available_models": ollama_check.get("models", []),
+            "solution": f"모델을 다운로드하세요: ollama pull {MODEL_CONFIG['MODEL_NAME']}"
+        }), 503
     
     job_id = str(uuid.uuid4())
     
     with job_lock:
         job_results[job_id] = {"status": "queued"}
     
-    # 큐에 pdf_data를 함께 넣어줍니다.
     job_queue.put((job_id, pdf_data, url, metadata))
-    print(f"[서버] 등록: {job_id[:8]}")
+    print(f"[서버] 작업 등록: {job_id[:8]}")
     
     return jsonify({"status": "queued", "job_id": job_id})
 
@@ -330,11 +412,27 @@ def status(job_id):
         result = job_results.get(job_id)
     
     if not result:
-        return jsonify({"error": "없음"}), 404
+        return jsonify({"error": "작업을 찾을 수 없습니다"}), 404
     
     return jsonify(result)
 
 if __name__ == '__main__':
-    print("[서버] CareerOS Collector AI")
-    print(f"[서버] 데이터: {SAVE_DIR}")
+    print("[서버] CareerOS Collector AI 시작")
+    print(f"[서버] 데이터 디렉토리: {SAVE_DIR}")
+    print(f"[서버] Ollama URL: {OLLAMA_URL}")
+    print(f"[서버] 모델: {MODEL_CONFIG['MODEL_NAME']}")
+    
+    # 시작 시 Ollama 체크
+    ollama_status = check_ollama_connection()
+    if ollama_status.get("connected"):
+        print(f"[서버] Ollama 연결 성공")
+        if ollama_status.get("target_model_available"):
+            print(f"[서버] 모델 '{MODEL_CONFIG['MODEL_NAME']}' 사용 가능")
+        else:
+            print(f"[경고] 모델 '{MODEL_CONFIG['MODEL_NAME']}'을 찾을 수 없습니다")
+            print(f"[경고] 사용 가능한 모델: {ollama_status.get('models', [])}")
+    else:
+        print(f"[경고] Ollama 연결 실패: {ollama_status.get('error')}")
+        print(f"[경고] 서버는 시작되지만 분석은 작동하지 않습니다")
+    
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
