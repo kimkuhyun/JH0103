@@ -2,3 +2,5 @@ flask
 flask-cors
 requests
 Pillow
+pdf2image
+PyMuPDF
