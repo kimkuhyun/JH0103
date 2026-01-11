@@ -8,7 +8,9 @@ IMAGE_CONFIG = {
     "QUALITY": 75,
     "FORMAT": "JPEG",
     "MAX_CAPTURES": 3,  # 10 -> 3 (캡처 페이지 수 제한)
-    "MAX_PAGES_TO_ANALYZE": 3  # Ollama 전송 페이지 제한 (성능 최적화)
+    "MAX_PAGES_TO_ANALYZE": 3,  # Ollama 전송 페이지 제한 (성능 최적화)
+    "PDF_TO_IMAGE_SCALE": 1.0,  # 2.0 -> 1.0 (메모리 최적화)
+    "DIRECT_IMAGE_MODE": True  # PDF 우회, 직접 이미지 전송 모드
 }
 
 # 모델 설정
