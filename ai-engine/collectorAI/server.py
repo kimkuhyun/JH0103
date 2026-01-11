@@ -8,6 +8,7 @@ import threading
 import queue
 import uuid
 import time
+import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -33,6 +34,16 @@ OLLAMA_URL = "http://host.docker.internal:11434/api/generate"
 job_queue = queue.Queue()
 job_results = {}
 job_lock = threading.Lock()
+
+def sanitize_filename(title, max_length=100):
+    """파일명으로 사용할 수 있도록 문자열 정제"""
+    # 특수문자 제거 (영문, 한글, 숫자, 공백, 하이픈, 언더스코어만 허용)
+    safe_title = re.sub(r'[^\w\s-]', '', title, flags=re.UNICODE)
+    # 연속된 공백을 하나로
+    safe_title = re.sub(r'\s+', ' ', safe_title)
+    # 앞뒤 공백 제거 및 길이 제한
+    safe_title = safe_title.strip()[:max_length]
+    return safe_title if safe_title else 'unknown_job'
 
 def optimize_image(base64_str):
     """이미지 리사이징 및 최적화 (AI 메모리 폭발 방지)"""
@@ -111,9 +122,20 @@ def worker():
             
             # 4. 결과 저장 및 상태 업데이트
             if result_json:
-                # 파일로 저장
-                filename = f"result_{job_id}.json"
-                with open(os.path.join(JSON_DIR, filename), 'w', encoding='utf-8') as f:
+                # 공고 타이틀로 파일명 생성
+                title = result_json.get('job_summary', {}).get('title', f'result_{job_id}')
+                safe_title = sanitize_filename(title)
+                filename = f"{safe_title}.json"
+                
+                # 파일명 중복 방지
+                filepath = os.path.join(JSON_DIR, filename)
+                counter = 1
+                while os.path.exists(filepath):
+                    filename = f"{safe_title}_{counter}.json"
+                    filepath = os.path.join(JSON_DIR, filename)
+                    counter += 1
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(result_json, f, ensure_ascii=False, indent=2)
                     
                 with job_lock:
@@ -121,7 +143,7 @@ def worker():
                         "status": "success",
                         "data": result_json
                     }
-                print(f"[워커] 작업 성공: {job_id}")
+                print(f"[워커] 작업 성공: {job_id} -> {filename}")
             else:
                 with job_lock:
                     job_results[job_id] = {
