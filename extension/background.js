@@ -106,7 +106,7 @@ async function runAnalysis(tabId) {
         const payload = {
             pdf: imageBase64, // 변수명 호환성 유지
             url: prepRes.metadata.url,
-            metadata: prepRes.metadata
+            //metadata: prepRes.metadata
         };
 
         const res = await fetch(API_ENDPOINT, {

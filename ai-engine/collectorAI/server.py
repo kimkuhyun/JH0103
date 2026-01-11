@@ -73,6 +73,7 @@ def analyze_with_ollama(image_b64, prompt):
         "stream": False,
         "options": {
             "num_ctx": MODEL_CONFIG["NUM_CTX"],
+            "num_batch": MODEL_CONFIG["NUM_BATCH"],
             "temperature": MODEL_CONFIG["TEMPERATURE"]
         }
     }

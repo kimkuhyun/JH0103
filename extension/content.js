@@ -3,7 +3,7 @@
 // 1. 사이트별 설정
 const SITE_CONFIG = {
     'saramin.co.kr': {
-        mainSelector: '.wrap_jview',
+        mainSelector: 'section[class*="jview-0-"]',
         iframeSelector: 'iframe.iframe_content',
         trash: ['#sri_header', '.jview_wing', '.jv_footer', '#sri_footer', '.wrap_recommend_slide', '.floating_banner', '.banner_job_pass', '.jv_insatong']
     },
@@ -116,7 +116,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         downloadSourceCode();
 
         setTimeout(() => {
-            const rawText = extractText(config);
+            //const rawText = extractText(config);
             const bounds = getMainContentBounds(config);
             
             sendResponse({
@@ -126,7 +126,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     url: window.location.href,
                     title: document.title,
                     captured_at: new Date().toISOString(),
-                    raw_text: rawText
+                    //raw_text: rawText
                 }
             });
         }, 500);
