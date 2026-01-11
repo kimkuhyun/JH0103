@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
   "name": "CareerOS Collector",
-  "version": "3.0",
+  "version": "1.0",
   "description": "채용 공고 원클릭 캡처 및 AI 분석",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
-    "unlimitedStorage",
     "tabs",
-    "debugger"
+    "debugger",
+    "downloads",
+    "webNavigation"
   ],
   "host_permissions": [
     "http://localhost:5000/*",
@@ -21,22 +22,24 @@
   "action": {
     "default_popup": "popup.html"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["toast.css"]
-    }
-  ],
   "commands": {
-    "one-click-capture": {
+    "start_capture": {
       "suggested_key": {
         "default": "Alt+Shift+S",
         "mac": "Alt+Shift+S"
       },
-      "description": "공고 원클릭 캡처 및 분석"
+      "description": "현재 공고 즉시 분석 시작"
     }
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["toast.css"],
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
   "web_accessible_resources": [
     {
       "resources": ["toast.css"],

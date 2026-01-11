@@ -1,7 +1,4 @@
-flask
-flask-cors
+Flask
+Flask-Cors
 requests
 Pillow
-PyMuPDF
-selenium
-webdriver-manager

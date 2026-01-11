@@ -1,254 +1,138 @@
-// CareerOS Background Service Worker
-
-const STORAGE_KEYS = { 
-    JOBS: 'analysisJobs',
-    SETTINGS: 'settings'
-};
+// extension/background.js
 
 const API_ENDPOINT = 'http://localhost:5000/analyze';
-const API_IMAGES_ENDPOINT = 'http://localhost:5000/analyze_images';
 const STATUS_ENDPOINT = 'http://localhost:5000/status';
-const DIRECT_IMAGE_MODE = true; // PDF 우회, 이미지 직접 전송
 
-chrome.commands.onCommand.addListener(async (command) => {
-    if (command === 'one-click-capture') {
-        await startOneClickCapture();
-    }
-});
+// 유틸리티: 대기 함수
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'START_CAPTURE') {
-        startOneClickCapture();
-    }
-});
-
-chrome.action.onClicked.addListener(async (tab) => {
-    await startOneClickCapture();
-});
-
-async function startOneClickCapture() {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-    const tabId = tab.id;
-
+// [핵심 1] Chrome DevTools Protocol(CDP)을 이용한 전체 화면 캡처
+async function captureFullPage(tabId) {
     try {
-        await showToast(tabId, '페이지 정리 중...', 'capture');
-        
-        const prepareResult = await chrome.tabs.sendMessage(tabId, { 
-            action: 'PREPARE_CAPTURE' 
+        // 1. 디버거 연결
+        await chrome.debugger.attach({ tabId }, "1.3");
+
+        // 2. 전체 페이지 높이 계산
+        const layoutMetrics = await chrome.debugger.sendCommand({ tabId }, "Page.getLayoutMetrics");
+        const width = Math.ceil(layoutMetrics.contentSize.width);
+        const height = Math.ceil(layoutMetrics.contentSize.height);
+
+        // 3. 뷰포트 강제 확장 (스크롤 없이 전체가 보이게 설정)
+        await chrome.debugger.sendCommand({ tabId }, "Emulation.setDeviceMetricsOverride", {
+            width: width,
+            height: height,
+            deviceScaleFactor: 1,
+            mobile: false,
         });
-        
-        if (!prepareResult.success) {
-            throw new Error('페이지 준비 실패');
+
+        // 4. 캡처 (JPEG, 품질 80)
+        const result = await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", {
+            format: "jpeg",
+            quality: 80, 
+            captureBeyondViewport: true, // 화면 밖까지 캡처
+            fromSurface: true
+        });
+
+        // 5. 설정 원상복구
+        await chrome.debugger.sendCommand({ tabId }, "Emulation.clearDeviceMetricsOverride");
+
+        return result.data; // Base64 이미지 데이터
+
+    } catch (e) {
+        console.error("Capture failed:", e);
+        throw e;
+    } finally {
+        // 디버거 연결 해제 (필수)
+        try { await chrome.debugger.detach({ tabId }); } catch(e) {}
+    }
+}
+
+// [핵심 2] 서버 상태 확인 (Polling)
+async function pollStatus(jobId) {
+    let attempts = 0;
+    const maxAttempts = 60; // 60초 대기
+
+    while (attempts < maxAttempts) {
+        try {
+            const response = await fetch(`${STATUS_ENDPOINT}/${jobId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'success') return data;
+                if (data.status === 'error') throw new Error(data.message);
+            }
+        } catch (e) {
+            console.error("Polling error:", e);
         }
+        await sleep(1000);
+        attempts++;
+    }
+    throw new Error("분석 시간 초과");
+}
+
+// [핵심 3] 공통 분석 실행 로직 (팝업/단축키 모두 여기서 실행)
+async function runAnalysis(tabId) {
+    try {
+        console.log(`[CareerOS] 탭(${tabId}) 분석 시작`);
+
+        // 1. 페이지 정리 및 텍스트 추출 (content.js)
+        const prepRes = await chrome.tabs.sendMessage(tabId, { action: 'PREPARE_CAPTURE' });
         
-        console.log(`[CareerOS] ${prepareResult.removedCount}개 요소 제거 완료`);
-        console.log('[CareerOS] 메인 컨텐츠 bounds:', prepareResult.bounds);
+        if (!prepRes || !prepRes.success) throw new Error("페이지 준비 실패");
+
+        // 2. 전체 화면 캡처
+        const imageBase64 = await captureFullPage(tabId);
+
         
-        await sleep(2000);
+        chrome.tabs.create({ url: "data:image/jpeg;base64," + imageBase64, active: false }); // 백그라운드 탭으로 열기
+        console.log("[CareerOS] 캡처된 이미지를 새 탭에 띄웠습니다.");
+
+        // 3. 서버 전송
+        const payload = {
+            pdf: imageBase64, // 변수명 호환성 유지
+            url: prepRes.metadata.url,
+            metadata: prepRes.metadata
+        };
+
+        const res = await fetch(API_ENDPOINT, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error("서버 연결 실패");
+        const { job_id } = await res.json();
+
+        // 4. 결과 대기
+        const finalResult = await pollStatus(job_id);
         
-        if (DIRECT_IMAGE_MODE) {
-            await captureAndAnalyzeImages(tabId, tab.url, prepareResult.metadata, prepareResult.bounds);
-        } else {
-            await captureAndAnalyzePDF(tabId, tab.url, prepareResult.metadata);
-        }
+        // 5. 성공 메시지 전달 (팝업이 닫혀있으면 에러가 날 수 있으므로 catch 처리)
+        chrome.runtime.sendMessage({ action: 'PROCESS_COMPLETE', data: finalResult })
+            .catch(() => console.log("팝업이 닫혀있어 알림 생략"));
+
+        console.log("[CareerOS] 분석 완료");
 
     } catch (error) {
-        console.error('[CareerOS] 실행 실패:', error);
-        await showToast(tabId, `오류: ${error.message}`, 'error');
-        if (tabId) chrome.debugger.detach({ tabId }).catch(() => {});
-        
-        await sleep(5000);
-        await hideToast(tabId);
+        console.error(error);
+        chrome.runtime.sendMessage({ action: 'PROCESS_ERROR', message: error.message })
+            .catch(() => console.log("팝업이 닫혀있어 에러 알림 생략"));
     }
 }
 
-async function captureAndAnalyzeImages(tabId, url, metadata, bounds) {
-    await showToast(tabId, '이미지 캡처 중...', 'capture');
-    
-    if (!bounds || bounds.height === 0) {
-        throw new Error('메인 컨텐츠 영역을 찾을 수 없습니다');
+// 1. 팝업 버튼 클릭 시 실행
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'START_PROCESS') {
+        runAnalysis(request.tabId);
+        return true; // 비동기 작업 명시
     }
-    
-    const images = [];
-    const viewportHeight = bounds.viewportHeight;
-    const contentHeight = bounds.height;
-    const startY = bounds.y;
-    
-    const captureCount = Math.min(
-        Math.ceil(contentHeight / viewportHeight),
-        3
-    );
-    
-    console.log(`[CareerOS] 캡처 계획: ${captureCount}회 (content: ${contentHeight}px, viewport: ${viewportHeight}px)`);
-    
-    for (let i = 0; i < captureCount; i++) {
-        const scrollY = startY + (i * viewportHeight);
-        
-        await chrome.tabs.sendMessage(tabId, {
-            action: 'SCROLL_TO',
-            scrollY: scrollY
-        });
-        
-        await sleep(500);
-        
-        const screenshot = await chrome.tabs.captureVisibleTab(null, {
-            format: 'jpeg',
-            quality: 80
-        });
-        
-        const croppedImage = await cropImage(
-            screenshot,
-            bounds.viewportX,
-            Math.max(0, bounds.viewportY - (i * viewportHeight)),
-            bounds.width,
-            Math.min(viewportHeight, contentHeight - (i * viewportHeight))
-        );
-        
-        images.push(croppedImage);
-        console.log(`[CareerOS] 캡처 ${i + 1}/${captureCount} 완료`);
-    }
-    
-    window.scrollTo({ top: bounds.scrollTop, behavior: 'instant' });
-    
-    await showToast(tabId, 'AI 분석 시작...', 'analyzing');
-    
-    const response = await fetch(API_IMAGES_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            images: images,
-            url: url,
-            metadata: metadata
-        })
-    });
+});
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '서버 요청 실패');
-    }
-    
-    const { job_id } = await response.json();
-    const finalResult = await pollStatus(job_id, tabId);
-    
-    if (finalResult.status === 'success') {
-        await showToast(tabId, 'AI 분석 완료! ✅', 'complete');
-        console.log('[CareerOS] 최종 결과:', finalResult.data);
-        
-        await sleep(3000);
-        await hideToast(tabId);
-    }
-}
-
-async function captureAndAnalyzePDF(tabId, url, metadata) {
-    await showToast(tabId, 'PDF 생성 중...', 'capture');
-
-    await chrome.debugger.attach({ tabId }, "1.3");
-    const result = await chrome.debugger.sendCommand({ tabId }, "Page.printToPDF", {
-        printBackground: true,
-        preferCSSPageSize: true
-    });
-    const pdfBase64 = result.data;
-    await chrome.debugger.detach({ tabId });
-
-    await showToast(tabId, 'AI 분석 시작...', 'analyzing');
-
-    const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            pdf: pdfBase64,
-            url: url,
-            metadata: metadata
-        })
-    });
-
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '서버 요청 실패');
-    }
-    
-    const { job_id } = await response.json();
-    const finalResult = await pollStatus(job_id, tabId);
-    
-    if (finalResult.status === 'success') {
-        await showToast(tabId, 'AI 분석 완료! ✅', 'complete');
-        console.log('[CareerOS] 최종 결과:', finalResult.data);
-        
-        await sleep(3000);
-        await hideToast(tabId);
-    }
-}
-
-async function cropImage(base64Image, x, y, width, height) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = new OffscreenCanvas(width, height);
-            const ctx = canvas.getContext('2d');
-            
-            ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
-            
-            canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 })
-                .then(blob => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const base64 = reader.result.split(',')[1];
-                        resolve(base64);
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                })
-                .catch(reject);
-        };
-        img.onerror = reject;
-        img.src = base64Image;
-    });
-}
-
-async function pollStatus(jobId, tabId) {
-    const maxAttempts = 30;
-    for (let i = 0; i < maxAttempts; i++) {
-        await sleep(2000);
-        
-        try {
-            const resp = await fetch(`${STATUS_ENDPOINT}/${jobId}`);
-            const result = await resp.json();
-
-            if (result.status === 'success') return result;
-            if (result.status === 'error') {
-                throw new Error(result.message || 'AI 분석 실패');
-            }
-            
-            if (i > 0 && i % 5 === 0) {
-                await showToast(tabId, `분석 중... (${i * 2}초 경과)`, 'analyzing');
-            }
-        } catch (fetchError) {
-            console.error('[CareerOS] 폴링 오류:', fetchError);
-            if (i === maxAttempts - 1) throw fetchError;
+// 2. 단축키(Alt+Shift+S) 입력 시 실행
+chrome.commands.onCommand.addListener(async (command) => {
+    if (command === "start_capture") {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs.length > 0) {
+            console.log("단축키로 분석 시작");
+            runAnalysis(tabs[0].id);
         }
     }
-    throw new Error('분석 시간 초과 (60초)');
-}
-
-async function showToast(tabId, message, type) {
-    try {
-        await chrome.tabs.sendMessage(tabId, {
-            action: 'SHOW_TOAST',
-            message: message,
-            type: type
-        });
-    } catch (e) {
-        console.log('[CareerOS] 토스트 표시 실패:', e);
-    }
-}
-
-async function hideToast(tabId) {
-    try {
-        await chrome.tabs.sendMessage(tabId, { action: 'HIDE_TOAST' });
-    } catch (e) {}
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+});

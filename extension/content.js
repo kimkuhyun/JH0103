@@ -1,278 +1,115 @@
-// CareerOS Content Script
+// extension/content.js
 
-class ToastNotification {
-    constructor() {
-        this.container = null;
-        this.init();
-    }
-
-    init() {
-        if (document.getElementById('careeros-toast-container')) return;
-        
-        this.container = document.createElement('div');
-        this.container.id = 'careeros-toast-container';
-        this.container.innerHTML = `
-            <div id="careeros-toast" class="careeros-toast">
-                <div class="careeros-toast-icon"></div>
-                <div class="careeros-toast-message"></div>
-                <div class="careeros-toast-progress"></div>
-            </div>
-        `;
-        document.body.appendChild(this.container);
-    }
-
-    show(message, type = 'info') {
-        const toast = document.getElementById('careeros-toast');
-        const msgEl = toast.querySelector('.careeros-toast-message');
-        const iconEl = toast.querySelector('.careeros-toast-icon');
-        
-        const icons = {
-            'capture': '📸',
-            'analyzing': '🤖',
-            'complete': '✅',
-            'error': '❌',
-            'info': 'ℹ️'
-        };
-        iconEl.textContent = icons[type] || icons.info;
-        
-        msgEl.textContent = message;
-        toast.className = `careeros-toast careeros-toast-${type} careeros-toast-show`;
-    }
-
-    hide() {
-        const toast = document.getElementById('careeros-toast');
-        if (toast) {
-            toast.classList.remove('careeros-toast-show');
-        }
-    }
-}
-
-const toast = new ToastNotification();
-
-// 사이트별 메인 컨텐츠 영역 선택자 (추천공고 제외)
-const SITE_CONFIGS = {
-    'wanted.co.kr': {
-        mainContentSelector: 'section[class*="JobDescription"], div[class*="JobDescription_JobDescription"], article[class*="Content"]',
-        excludeSelectors: [
-            '[class*="RelatedPosition"]',
-            '[class*="RecommendPosition"]',
-            '[class*="SimilarJob"]',
-            '[class*="recommend"]',
-            '[class*="related"]',
-            'footer',
-            '[class*="Footer"]'
-        ]
+// 1. 사이트별 설정
+const SITE_CONFIG = {
+    'saramin.co.kr': {
+        mainSelector: '.wrap_jview',
+        iframeSelector: 'iframe.iframe_content',
+        trash: ['#sri_header', '.jview_wing', '.jv_footer', '#sri_footer', '.wrap_recommend_slide', '.floating_banner', '.banner_job_pass', '.jv_insatong']
     },
     'jobkorea.co.kr': {
-        mainContentSelector: '.wrap-jview, .read-section, .section-recruit',
-        excludeSelectors: [
-            '.sameWork',
-            '.relateWork',
-            '#sameCompanyArea',
-            '.footer',
-            '#footer'
-        ]
+        mainSelector: '#container',
+        iframeSelector: 'iframe#GI_Read_Comt_Ifrm',
+        trash: ['#header', '#footer', '.dev-button-list', 'aside', '#recommended-section', '#menu-buttons', '.jk-ad', 'div[class*="banner"]']
     },
-    'saramin.co.kr': {
-        mainContentSelector: '.content, .jv_cont, .jv_summary, article',
-        excludeSelectors: [
-            '.related_jobs',
-            '.recommend_jobs',
-            '#footer',
-            '.footer',
-            '.jv_link_wrap',
-            '.content_bottom',
-            '[class*="HOT100"]',
-            '[class*="직업전체"]',
-            '.job_list_wrap',
-            '#recomm_job_list',
-            '[class*="recommend"]',
-            '[class*="banner"]',
-            '[class*="ad"]'
-        ]
-    },
-    'default': {
-        mainContentSelector: 'main, article, .content, [role="main"], .job-description, .detail-content',
-        excludeSelectors: [
-            '[class*="related"]',
-            '[class*="recommend"]',
-            '[class*="similar"]',
-            '[class*="footer"]',
-            '[class*="sidebar"]',
-            '[class*="ad-"]',
-            '[class*="advertisement"]',
-            'footer',
-            '#footer'
-        ]
-    }
+    'wanted.co.kr': { mainSelector: 'main', trash: ['nav', 'footer', 'aside'] },
+    'default': { mainSelector: 'body', trash: ['header', 'footer', '.ad', '.banner'] }
 };
 
-function getSiteConfig() {
+function getConfig() {
     const hostname = window.location.hostname;
-    for (const site of Object.keys(SITE_CONFIGS)) {
-        if (hostname.includes(site)) {
-            return SITE_CONFIGS[site];
-        }
+    for (const site in SITE_CONFIG) {
+        if (hostname.includes(site)) return SITE_CONFIG[site];
     }
-    return SITE_CONFIGS.default;
+    return SITE_CONFIG.default;
 }
 
-function findMainContentElement() {
-    const config = getSiteConfig();
-    const selectors = config.mainContentSelector.split(',').map(s => s.trim());
+// [디버깅] 소스코드 다운로드
+function downloadSourceCode() {
+    const htmlContent = document.documentElement.outerHTML;
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
     
-    for (const selector of selectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-            console.log(`[CareerOS] 메인 컨텐츠 발견: ${selector}`);
-            return element;
-        }
-    }
-    
-    console.log('[CareerOS] 메인 컨텐츠를 찾을 수 없음, body 사용');
-    return document.body;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `debug_source_${Date.now()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
-function removeUnnecessaryElements() {
-    const config = getSiteConfig();
-    const removedElements = [];
-    
-    console.log('[CareerOS] 불필요한 요소 제거 시작');
-    
-    config.excludeSelectors.forEach(selector => {
+// Iframe 평탄화
+function flattenIframes(config) {
+    if (!config.iframeSelector) return;
+    const iframes = document.querySelectorAll(config.iframeSelector);
+    iframes.forEach(iframe => {
         try {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => {
-                if (el && el.parentNode) {
-                    removedElements.push({
-                        element: el,
-                        parent: el.parentNode,
-                        nextSibling: el.nextSibling
-                    });
-                    el.parentNode.removeChild(el);
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!iframeDoc || !iframeDoc.body) return;
+            
+            console.log('[CareerOS] 🔨 Iframe 내용 이식');
+            const newDiv = document.createElement('div');
+            newDiv.className = 'careeros-flattened-content';
+            newDiv.innerHTML = iframeDoc.body.innerHTML;
+            newDiv.style.width = '100%';
+            newDiv.style.overflow = 'visible';
+            newDiv.style.backgroundColor = '#fff';
+            iframe.parentNode.replaceChild(newDiv, iframe);
+        } catch (e) {
+            console.warn('[CareerOS] Iframe 접근 불가', e);
+            iframe.style.height = '3000px'; 
+        }
+    });
+}
+
+function cleanPage(config) {
+    if (config.trash) {
+        config.trash.forEach(sel => document.querySelectorAll(sel).forEach(el => el.style.display = 'none'));
+    }
+    document.querySelectorAll('*').forEach(el => {
+        if (window.getComputedStyle(el).position === 'fixed' && !el.closest(config.mainSelector)) {
+            el.style.display = 'none';
+        }
+    });
+}
+
+function extractText(config) {
+    const mainEl = document.querySelector(config.mainSelector);
+    // 텍스트 길이 제한 (AI 과부하 방지)
+    const text = (mainEl ? mainEl.innerText : document.body.innerText).replace(/\s+/g, ' ').trim().substring(0, 6000);
+    return text;
+}
+
+// [핵심 수정] 메시지 리스너
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // 1. 가장 중요한 체크: 내가 메인 창(Top Frame)이 아니면 무시한다.
+    if (window !== window.top) {
+        return; // 아무것도 하지 않음 (광고 Iframe 등은 여기서 멈춤)
+    }
+
+    if (request.action === 'PREPARE_CAPTURE') {
+        console.log('[CareerOS] 🧹 페이지 정리 시작 (Top Frame)');
+        const config = getConfig();
+        
+        flattenIframes(config);
+        cleanPage(config);
+
+        // 디버깅용 다운로드 (이제 메인 창에서 한 번만 실행됨)
+        downloadSourceCode();
+
+        setTimeout(() => {
+            const rawText = extractText(config);
+            sendResponse({
+                success: true,
+                metadata: {
+                    url: window.location.href,
+                    title: document.title,
+                    captured_at: new Date().toISOString(),
+                    raw_text: rawText
                 }
             });
-            if (elements.length > 0) {
-                console.log(`[CareerOS] 제거됨: ${selector} (${elements.length}개)`);
-            }
-        } catch (e) {
-            console.log(`[CareerOS] 제거 실패: ${selector}`, e);
-        }
-    });
-    
-    console.log(`[CareerOS] 총 ${removedElements.length}개 요소 제거 완료`);
-    return removedElements;
-}
-
-function restoreElements(removedElements) {
-    console.log('[CareerOS] 요소 복원 시작');
-    removedElements.forEach(({ element, parent, nextSibling }) => {
-        try {
-            if (nextSibling) {
-                parent.insertBefore(element, nextSibling);
-            } else {
-                parent.appendChild(element);
-            }
-        } catch (e) {
-            console.log('[CareerOS] 복원 실패:', e);
-        }
-    });
-    console.log('[CareerOS] 복원 완료');
-}
-
-function getMainContentBounds() {
-    const mainElement = findMainContentElement();
-    if (!mainElement) {
-        return null;
-    }
-    
-    const rect = mainElement.getBoundingClientRect();
-    const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-    
-    const bounds = {
-        x: rect.left + scrollX,
-        y: rect.top + scrollY,
-        width: rect.width,
-        height: rect.height,
-        viewportX: rect.left,
-        viewportY: rect.top,
-        scrollTop: window.pageYOffset,
-        scrollHeight: document.documentElement.scrollHeight,
-        viewportHeight: window.innerHeight
-    };
-    
-    console.log('[CareerOS] 메인 컨텐츠 좌표:', bounds);
-    return bounds;
-}
-
-function extractMetadata() {
-    const metadata = {
-        url: window.location.href,
-        captured_at: new Date().toISOString(),
-        title: document.title,
-        company: null,
-        raw_text: null
-    };
-    
-    const titleParts = document.title.split(/[|\-\u2013]/);
-    if (titleParts.length > 0) {
-        metadata.company = titleParts[0].trim();
-    }
-    
-    const mainContent = findMainContentElement();
-    if (mainContent) {
-        metadata.raw_text = mainContent.textContent
-            .replace(/\s+/g, ' ')
-            .trim()
-            .substring(0, 5000);
-    }
-    
-    return metadata;
-}
-
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'PREPARE_CAPTURE') {
-        console.log('[CareerOS] PREPARE_CAPTURE 시작');
-        toast.show('페이지 정리 중...', 'capture');
-        
-        const removedElements = removeUnnecessaryElements();
-        const metadata = extractMetadata();
-        const bounds = getMainContentBounds();
-        
-        sendResponse({
-            success: true,
-            metadata: metadata,
-            bounds: bounds,
-            removedCount: removedElements.length
-        });
-        
-        setTimeout(() => {
-            restoreElements(removedElements);
-            console.log('[CareerOS] 자동 복원 완료');
-        }, 5000);
-        
-        return true;
-    }
-    
-    if (request.action === 'SCROLL_TO') {
-        window.scrollTo({
-            top: request.scrollY,
-            behavior: 'instant'
-        });
-        sendResponse({ success: true });
-        return true;
-    }
-    
-    if (request.action === 'SHOW_TOAST') {
-        toast.show(request.message, request.type);
-        sendResponse({ success: true });
-        return true;
-    }
-    
-    if (request.action === 'HIDE_TOAST') {
-        toast.hide();
-        sendResponse({ success: true });
+        }, 500);
         return true;
     }
 });
