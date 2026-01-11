@@ -49,8 +49,10 @@ class ToastNotification {
 
 const toast = new ToastNotification();
 
+// 사이트별 채용공고 메인 컨테이너 선택자
 const SITE_CONFIGS = {
     'wanted.co.kr': {
+        mainContentSelector: 'article[class*="JobContent"], [class*="JobDescription"], main',
         removeSelectors: [
             '[class*="RelatedPosition"]',
             '[class*="RecommendPosition"]',
@@ -61,9 +63,11 @@ const SITE_CONFIGS = {
             '[class*="Footer"]',
             'header',
             'nav'
-        ]
+        ],
+        scrollToTop: true
     },
     'jobkorea.co.kr': {
+        mainContentSelector: '.wrap-jview, .jv-cont, main',
         removeSelectors: [
             '.sameWork',
             '.relateWork',
@@ -74,9 +78,11 @@ const SITE_CONFIGS = {
             '.header',
             'nav',
             '.gnb'
-        ]
+        ],
+        scrollToTop: true
     },
     'saramin.co.kr': {
+        mainContentSelector: '.content, .wrap_jv_cont, main',
         removeSelectors: [
             '.related_jobs',
             '.recommend_jobs',
@@ -96,9 +102,11 @@ const SITE_CONFIGS = {
             '[class*="recommend"]',
             '[class*="banner"]',
             '[class*="ad"]'
-        ]
+        ],
+        scrollToTop: true
     },
     'default': {
+        mainContentSelector: 'main, article, [role="main"], .content, #content',
         removeSelectors: [
             '[class*="related"]',
             '[class*="recommend"]',
@@ -111,7 +119,8 @@ const SITE_CONFIGS = {
             '#footer',
             'header',
             'nav'
-        ]
+        ],
+        scrollToTop: true
     }
 };
 
@@ -125,6 +134,39 @@ function getSiteConfig() {
     return SITE_CONFIGS.default;
 }
 
+function findMainContentElement() {
+    """채용공고 메인 컨테이너 찾기"""
+    const config = getSiteConfig();
+    const selectors = config.mainContentSelector.split(', ');
+    
+    for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+            console.log(`[CareerOS] 메인 컨테이너 발견: ${selector}`);
+            return element;
+        }
+    }
+    
+    console.log('[CareerOS] 메인 컨테이너를 찾을 수 없음, body 사용');
+    return document.body;
+}
+
+function getElementBounds(element) {
+    """요소의 화면 좌표 및 크기 반환"""
+    const rect = element.getBoundingClientRect();
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+    
+    return {
+        x: Math.max(0, rect.left + scrollX),
+        y: Math.max(0, rect.top + scrollY),
+        width: rect.width,
+        height: rect.height,
+        viewportX: Math.max(0, rect.left),
+        viewportY: Math.max(0, rect.top)
+    };
+}
+
 function removeUnnecessaryElements() {
     const config = getSiteConfig();
     const removedElements = [];
@@ -136,13 +178,11 @@ function removeUnnecessaryElements() {
             const elements = document.querySelectorAll(selector);
             elements.forEach(el => {
                 if (el && el.parentNode) {
-                    // 복원용 정보 저장
                     removedElements.push({
                         element: el,
                         parent: el.parentNode,
                         nextSibling: el.nextSibling
                     });
-                    // DOM에서 완전 제거
                     el.parentNode.removeChild(el);
                 }
             });
@@ -183,14 +223,14 @@ function extractMetadata() {
         raw_text: null
     };
     
-    // 간단한 회사명 추출
-    const titleParts = document.title.split(/[|\-\–]/);
+    // 회사명 추출
+    const titleParts = document.title.split(/[|\\-\u2013]/);
     if (titleParts.length > 0) {
         metadata.company = titleParts[0].trim();
     }
     
-    // 페이지 텍스트 추출 (본문만)
-    const mainContent = document.querySelector('main, article, .content, [role="main"]');
+    // 페이지 텍스트 추출
+    const mainContent = findMainContentElement();
     if (mainContent) {
         metadata.raw_text = mainContent.textContent
             .replace(/\s+/g, ' ')
@@ -206,21 +246,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log('[CareerOS] PREPARE_CAPTURE 시작');
         toast.show('페이지 정리 중...', 'capture');
         
+        const config = getSiteConfig();
+        
+        // 스크롤 최상단으로
+        if (config.scrollToTop) {
+            window.scrollTo(0, 0);
+        }
+        
         const removedElements = removeUnnecessaryElements();
         const metadata = extractMetadata();
+        const mainElement = findMainContentElement();
+        const bounds = getElementBounds(mainElement);
         
         sendResponse({
             success: true,
             metadata: metadata,
-            removedCount: removedElements.length
+            removedCount: removedElements.length,
+            bounds: bounds
         });
         
-        // 5초 후 자동 복원 (PDF 생성 완료 후)
+        // 5초 후 자동 복원
         setTimeout(() => {
             restoreElements(removedElements);
             console.log('[CareerOS] 자동 복원 완료');
         }, 5000);
         
+        return true;
+    }
+    
+    if (request.action === 'GET_MAIN_CONTENT_BOUNDS') {
+        const mainElement = findMainContentElement();
+        const bounds = getElementBounds(mainElement);
+        sendResponse({ success: true, bounds: bounds });
+        return true;
+    }
+    
+    if (request.action === 'SCROLL_AND_CAPTURE') {
+        const config = getSiteConfig();
+        const mainElement = findMainContentElement();
+        const bounds = getElementBounds(mainElement);
+        
+        // 메인 컨테이너를 화면에 표시
+        mainElement.scrollIntoView({ behavior: 'instant', block: 'start' });
+        
+        sendResponse({ success: true, bounds: bounds });
         return true;
     }
     
