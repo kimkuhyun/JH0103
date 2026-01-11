@@ -2,15 +2,24 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# 패키지 설치
+# Chromium + ChromeDriver
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    fonts-liberation \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libgbm-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 모든 Python 파일 복사
 COPY *.py .
 
-# 데이터 저장소 폴더 생성
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data /app/data/images /app/data/pdfs
 
-# 서버 실행
 CMD ["python", "server.py"]

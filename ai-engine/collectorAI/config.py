@@ -1,151 +1,84 @@
+# ai-engine/collectorAI/config.py
+
 """
-CareerOS Collector AI - 중앙 설정 및 프롬프트 관리
+CareerOS Collector AI - 설정 및 프롬프트
 """
 
 # 이미지 처리 설정
 IMAGE_CONFIG = {
-    "MAX_WIDTH": 1200,  # 이미지 최대 너비
-    "QUALITY": 85,      # JPEG 품질
-    "FORMAT": "JPEG"    # 이미지 포맷
+    "MAX_WIDTH": 1000,      # AI 처리를 위한 이미지 최대 너비 리사이징
+    "QUALITY": 80,          # JPEG 품질
+    "FORMAT": "JPEG"
 }
 
 # 모델 설정
 MODEL_CONFIG = {
-    "MODEL_NAME": "llama3.2-vision",
-    "NUM_CTX": 8192,    # 컨텍스트 윈도우 확대 (이미지 병합용)
-    "TEMPERATURE": 0
+    "MODEL_NAME": "qwen2.5vl", # 또는 사용 중인 모델명
+    "NUM_CTX": 6000,        # 컨텍스트 윈도우 (이미지+텍스트 고려)
+    "NUM_BATCH": 256,
+    "TEMPERATURE": 0,       # 정확도 우선
+    "TIMEOUT": 120          # 타임아웃 넉넉하게 설정
 }
 
 # 채용공고 분석 프롬프트
 ANALYSIS_PROMPT_TEMPLATE = """
-[Role] 전문 채용공고 분석가
-[Task] 이미지에서 채용공고 정보를 빠짐없이 추출하여 JSON으로 구조화
+당신은 채용공고 전문 분석가입니다. 제공된 [이미지]와 [추출된 텍스트]를 바탕으로 채용공고의 핵심 정보를 JSON으로 추출하세요.
 
-[메타데이터 참고]
-{metadata_hint}
+[분석 지침]
+1. **가장 중요:** 아래 제공되는 [추출된 텍스트] 내용을 최우선으로 신뢰하세요. 이미지는 구조를 파악하는 용도로 참고하세요.
+2. 회사명, 공고제목, 마감일, 근무지, 상세요강(자격요건, 우대사항)을 정확히 찾으세요.
+3. 연봉 정보가 명확하지 않으면 "면접 후 결정" 등으로 표기하세요.
+4. '채용 시 마감'인 경우 마감일을 null로 설정하세요.
 
-[Critical Rules - 반드시 준수]
-
-1. **산업 분류 (industry_domain)**
-   - 회사의 실제 사업 분야로 분류 (공고 직무가 아님)
-   - 예: 가구 철물 회사의 영업직 → "제조/가구", IT회사 경리 → "IT"
-   - 분류: IT/소프트웨어, 금융, 제조, 유통/물류, 서비스, 의료/제약, 교육, 건설, 디자인, 미디어/광고
-
-2. **마감일 (deadline)**
-   - deadline_date: 반드시 YYYY-MM-DD 형식 (예: 2026-01-21)
-   - 이미지에서 "마감일", "접수기간", "~까지" 등을 찾아 정확한 날짜 추출
-   - 날짜가 없으면 null
-
-3. **급여 (salary)**
-   - "채용 보상금", "입사 축하금", "추천 보상금"은 급여가 아님 - 제외
-   - 연봉/월급 정보만 기재, 없으면 "회사 내규에 따름"
-
-4. **근무지 주소 (location.address)**
-   - 우편번호 제외 (06105 같은 숫자 제외)
-   - 도로명 주소만 기재 (예: "서울 강남구 연주로129길 13")
-   - 지하철역 정보는 notes에 기재
-
-5. **회사 소개 (company_info)**
-   - 회사 소개/비전/미션 섹션에서 추출
-   - 설립일, 직원 수, 업종, 사업 내용 등 포함
-   - 없으면 null
-
-6. **복리후생 (benefits)** - 반드시 포함
-   - 이미지에서 "복리후생", "혜택", "지원" 섹션 찾아서 모두 추출
-   - 예: 유연근무제, 재택근무, 식대, 복지카드, 건강검진, 자녀학자금, 경조휴가 등
-
-7. **전형절차 (hiring_process)**
-   - 서류전형 → 면접 → 최종합격 등 단계별로 배열
-
-8. **주요업무 (key_responsibilities)**
-   - 구체적으로 작성 (예: "영업지원 업무 전반", "수/발주 업무", "세금계산서 관리")
-
-9. **자격요건과 우대사항 구분**
-   - essential_qualifications: 필수 조건만
-   - preferred_qualifications: 우대 사항만 (SAP 경험, 관련 자격증 등)
-
-10. **수습기간**
-   - probation_period 필드에 기재 (예: "3개월")
-
-[Output JSON Schema]
+[JSON 스키마]
 {{
   "meta": {{
     "url": "{url}",
     "captured_at": "{date}",
-    "industry_domain": "회사의 실제 산업 분야"
+    "industry_domain": "IT/소프트웨어|금융|제조|유통|의료|교육|건설|미디어|서비스 중 선택"
   }},
   "company_info": {{
-    "name": "회사명 (주식회사, ㈜ 등 포함)",
-    "description": "회사 소개 내용 또는 null",
-    "established": "설립일 또는 null",
-    "employee_count": "직원 수 또는 null",
-    "business_type": "업종 또는 null"
+    "name": "회사명",
+    "description": "회사 소개 (텍스트에 있으면 추출)",
+    "employee_count": "직원 수 (있으면 추출)",
+    "business_type": "업종"
   }},
   "timeline": {{
     "deadline_date": "YYYY-MM-DD 또는 null",
-    "deadline_text": "마감일 원본 텍스트"
+    "deadline_text": "마감일 원문 (예: 2024년 5월 30일, 채용시까지)"
   }},
   "job_summary": {{
-    "company": "회사명 (주식회사, ㈜ 등 포함)",
     "title": "공고 제목",
-    "employment_type": "정규직/계약직/인턴/아르바이트/프리랜서",
-    "probation_period": "수습기간 (없으면 null)",
-    "experience_required": "경력 요구사항 (예: 2년 이상, 신입)"
+    "employment_type": "정규직|계약직|인턴|파트타임",
+    "experience_required": "경력 요건 (예: 신입, 경력 3년 이상)"
   }},
   "analysis": {{
-    "key_responsibilities": ["구체적인 업무 내용 1", "업무 2", "업무 3"],
-    "essential_qualifications": ["필수 자격요건"],
-    "preferred_qualifications": ["우대 사항"],
-    "core_competencies": ["필요 역량 (Soft Skills)"],
-    "tools_and_knowledge": ["필요 기술/도구 (Hard Skills)"],
-    "hiring_process": ["서류전형", "1차면접", "2차면접", "최종합격"],
+    "key_responsibilities": ["주요업무1", "주요업무2"],
+    "essential_qualifications": ["자격요건1", "자격요건2"],
+    "preferred_qualifications": ["우대사항1", "우대사항2"],
+    "tech_stack": ["기술스택1", "기술스택2"],
+    "hiring_process": ["전형절차1", "전형절차2"],
     "working_conditions": {{
-      "salary": "급여 정보 (보상금 제외)",
-      "location": {{
-        "address": "도로명 주소 (우편번호 제외)",
-        "notes": "교통편, 추가 위치 정보"
-      }},
-      "schedule": {{
-        "work_hours": "근무 시간",
-        "work_days": "근무 요일",
-        "notes": "유연근무제, 교대근무 여부 등"
-      }}
+      "salary": "급여 정보",
+      "location": "근무지 주소"
     }},
-    "benefits": ["복리후생 항목 1", "항목 2", "항목 3"]
+    "benefits": ["복리후생1", "복리후생2"]
   }}
 }}
 
-[Important] 이미지에 있는 모든 정보를 빠짐없이 추출하세요. 특히 회사 소개, 복리후생, 전형절차, 마감일을 놓치지 마세요.
+[추출된 텍스트 데이터]
+{raw_text_hint}
 """
-
-def get_metadata_hint(metadata):
-    """메타데이터를 프롬프트용 텍스트로 변환"""
-    if not metadata:
-        return "메타데이터 없음"
-    
-    hints = []
-    if metadata.get('company'):
-        hints.append(f"회사명: {metadata['company']}")
-    if metadata.get('title'):
-        hints.append(f"공고제목: {metadata['title']}")
-    if metadata.get('salary'):
-        hints.append(f"급여정보: {metadata['salary']}")
-    if metadata.get('location'):
-        hints.append(f"근무지: {metadata['location']}")
-    if metadata.get('deadline'):
-        hints.append(f"마감일: {metadata['deadline']}")
-    if metadata.get('company_description'):
-        hints.append(f"회사소개: {metadata['company_description']}")
-    if metadata.get('employee_count'):
-        hints.append(f"직원수: {metadata['employee_count']}")
-    
-    return "\n".join(hints) if hints else "메타데이터 없음"
 
 def get_analysis_prompt(url, date, metadata):
     """분석용 프롬프트 생성"""
-    metadata_hint = get_metadata_hint(metadata)
+    # 텍스트 데이터가 너무 길면 잘라서 넣음 (토큰 제한 방지)
+    raw_text = metadata.get('raw_text', '텍스트 데이터 없음')
+    if len(raw_text) > 6000:
+        raw_text = raw_text[:6000] + "...(생략)"
+        
     return ANALYSIS_PROMPT_TEMPLATE.format(
         url=url,
         date=date,
-        metadata_hint=metadata_hint
+        raw_text_hint=raw_text
     )

@@ -1,87 +1,29 @@
-/* CareerOS Toast Notification Styles */
-
+/* extension/toast.css */
 #careeros-toast-container {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 2147483647;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    z-index: 2147483647; /* 최상단 */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .careeros-toast {
+    background: #333;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 20px;
-    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-    color: #f8fafc;
-    border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
-    font-size: 14px;
-    font-weight: 500;
-    min-width: 280px;
-    max-width: 400px;
-    transform: translateX(120%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 0;
+    gap: 10px;
+    animation: slideIn 0.3s ease-out;
+    min-width: 200px;
 }
 
-.careeros-toast-show {
-    transform: translateX(0);
-    opacity: 1;
-}
+.careeros-toast.success { background: #4CAF50; }
+.careeros-toast.error { background: #F44336; }
 
-.careeros-toast-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-}
-
-.careeros-toast-message {
-    flex: 1;
-    line-height: 1.4;
-}
-
-.careeros-toast-progress {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    height: 3px;
-    background: #3b82f6;
-    border-radius: 0 0 12px 12px;
-    width: 0;
-}
-
-/* Type variations */
-.careeros-toast-capture {
-    border-left: 4px solid #3b82f6;
-}
-
-.careeros-toast-capture .careeros-toast-icon {
-    animation: pulse 1.5s infinite;
-}
-
-.careeros-toast-analyzing {
-    border-left: 4px solid #f59e0b;
-}
-
-.careeros-toast-analyzing .careeros-toast-icon {
-    animation: spin 1s linear infinite;
-}
-
-.careeros-toast-complete {
-    border-left: 4px solid #10b981;
-}
-
-.careeros-toast-error {
-    border-left: 4px solid #ef4444;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
 }
