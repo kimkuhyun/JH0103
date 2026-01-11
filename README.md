@@ -31,7 +31,6 @@
 * **.github/workflows/auth-service-ci.yml**: CI/CD 파이프라인 설정. 인증 서비스(auth-service)의 빌드 및 테스트 자동화 정의.
 * **.gitignore**: Git 버전 관리에서 제외할 파일 목록 정의.
 * **docker-compose.yml**: 전체 시스템(AI 서버, 데이터베이스 등)의 컨테이너 오케스트레이션 설정 파일.
-* **CHANGES.md**: 주요 기능 변경사항 및 성능 개선 이력 기록.
 
 ### 2.2 UI (Frontend)
 React 기반의 웹 애플리케이션 소스 코드입니다. 경로: `UI/`
