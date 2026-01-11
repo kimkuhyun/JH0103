@@ -12,7 +12,10 @@ const SITE_CONFIG = {
         iframeSelector: 'iframe#GI_Read_Comt_Ifrm',
         trash: ['#header', '#footer', '.dev-button-list', 'aside', '#recommended-section', '#menu-buttons', '.jk-ad', 'div[class*="banner"]']
     },
-    'wanted.co.kr': { mainSelector: 'main', trash: ['nav', 'footer', 'aside'] },
+    'wanted.co.kr': { 
+        mainSelector: '.JobContent_JobContent__Qb6DR', 
+        trash: ['.JobAssociated_JobAssociated__XGF86', 'nav', 'footer', 'aside'] 
+    },
     'default': { mainSelector: 'body', trash: ['header', 'footer', '.ad', '.banner'] }
 };
 
@@ -81,6 +84,20 @@ function extractText(config) {
     return text;
 }
 
+// [추가] 메인 콘텐츠 영역의 정확한 bounds 계산
+function getMainContentBounds(config) {
+    const mainEl = document.querySelector(config.mainSelector);
+    if (!mainEl) return null;
+    
+    const rect = mainEl.getBoundingClientRect();
+    return {
+        x: Math.floor(rect.left + window.scrollX),
+        y: Math.floor(rect.top + window.scrollY),
+        width: Math.ceil(rect.width),
+        height: Math.ceil(rect.height)
+    };
+}
+
 // [핵심 수정] 메시지 리스너
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 1. 가장 중요한 체크: 내가 메인 창(Top Frame)이 아니면 무시한다.
@@ -100,8 +117,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         setTimeout(() => {
             const rawText = extractText(config);
+            const bounds = getMainContentBounds(config);
+            
             sendResponse({
                 success: true,
+                bounds: bounds, // 캡처할 정확한 영역
                 metadata: {
                     url: window.location.href,
                     title: document.title,

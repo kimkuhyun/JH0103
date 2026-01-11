@@ -7,15 +7,17 @@ const STATUS_ENDPOINT = 'http://localhost:5000/status';
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // [핵심 1] Chrome DevTools Protocol(CDP)을 이용한 전체 화면 캡처
-async function captureFullPage(tabId) {
+async function captureFullPage(tabId, bounds = null) {
     try {
         // 1. 디버거 연결
         await chrome.debugger.attach({ tabId }, "1.3");
 
         // 2. 전체 페이지 높이 계산
         const layoutMetrics = await chrome.debugger.sendCommand({ tabId }, "Page.getLayoutMetrics");
-        const width = Math.ceil(layoutMetrics.contentSize.width);
-        const height = Math.ceil(layoutMetrics.contentSize.height);
+        
+        // bounds가 있으면 해당 영역 기준, 없으면 전체 페이지 기준
+        const width = bounds ? bounds.width : Math.ceil(layoutMetrics.contentSize.width);
+        const height = bounds ? bounds.height : Math.ceil(layoutMetrics.contentSize.height);
 
         // 3. 뷰포트 강제 확장 (스크롤 없이 전체가 보이게 설정)
         await chrome.debugger.sendCommand({ tabId }, "Emulation.setDeviceMetricsOverride", {
@@ -25,15 +27,29 @@ async function captureFullPage(tabId) {
             mobile: false,
         });
 
-        // 4. 캡처 (JPEG, 품질 80)
-        const result = await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", {
+        // 4. 캡처 옵션 설정
+        const captureOptions = {
             format: "jpeg",
             quality: 80, 
-            captureBeyondViewport: true, // 화면 밖까지 캡처
+            captureBeyondViewport: true,
             fromSurface: true
-        });
+        };
+        
+        // bounds가 있으면 clip 설정 추가
+        if (bounds) {
+            captureOptions.clip = {
+                x: bounds.x,
+                y: bounds.y,
+                width: bounds.width,
+                height: bounds.height,
+                scale: 1
+            };
+        }
 
-        // 5. 설정 원상복구
+        // 5. 캡처 실행
+        const result = await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", captureOptions);
+
+        // 6. 설정 원상복구
         await chrome.debugger.sendCommand({ tabId }, "Emulation.clearDeviceMetricsOverride");
 
         return result.data; // Base64 이미지 데이터
@@ -79,11 +95,11 @@ async function runAnalysis(tabId) {
         
         if (!prepRes || !prepRes.success) throw new Error("페이지 준비 실패");
 
-        // 2. 전체 화면 캡처
-        const imageBase64 = await captureFullPage(tabId);
+        // 2. bounds 정보를 사용하여 정확한 영역 캡처
+        const imageBase64 = await captureFullPage(tabId, prepRes.bounds);
 
-        
-        chrome.tabs.create({ url: "data:image/jpeg;base64," + imageBase64, active: false }); // 백그라운드 탭으로 열기
+        // 디버깅: 캡처된 이미지 확인
+        chrome.tabs.create({ url: "data:image/jpeg;base64," + imageBase64, active: false });
         console.log("[CareerOS] 캡처된 이미지를 새 탭에 띄웠습니다.");
 
         // 3. 서버 전송
@@ -105,7 +121,7 @@ async function runAnalysis(tabId) {
         // 4. 결과 대기
         const finalResult = await pollStatus(job_id);
         
-        // 5. 성공 메시지 전달 (팝업이 닫혀있으면 에러가 날 수 있으므로 catch 처리)
+        // 5. 성공 메시지 전달
         chrome.runtime.sendMessage({ action: 'PROCESS_COMPLETE', data: finalResult })
             .catch(() => console.log("팝업이 닫혀있어 알림 생략"));
 
