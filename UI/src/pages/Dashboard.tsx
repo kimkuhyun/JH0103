@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import type { Job } from '../types/index';
-import { MOCK_JOBS } from '../mockdata/mockData';
+import type { Job, JobStatus, BackendJob } from '../types/index';
 import { KakaoMapContainer } from '../components/map/KakaoMapContainer';
 import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Briefcase, Code2, Building2, Home as HomeIcon, Settings } from 'lucide-react';
 import { parseJsonToJob } from '../utils/jobParser';
@@ -15,22 +14,67 @@ interface HomeLocation {
 }
 
 export function Dashboard() {
-  const [jobs, setJobs] = useState<Job[]>(MOCK_JOBS);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [showHomeSettings, setShowHomeSettings] = useState(false);
   const [homeLocation, setHomeLocation] = useState<HomeLocation | null>(null);
   const [transitRoutes, setTransitRoutes] = useState<Map<number, TransitRoute>>(new Map());
   const [loadingRoutes, setLoadingRoutes] = useState<Set<number>>(new Set());
+  const [isLoading, setIsLoading] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedJob = jobs.find(j => j.id === selectedJobId);
 
   // 로컬스토리지에서 집 위치 불러오기
   useEffect(() => {
-    const saved = localStorage.getItem('homeLocation');
-    if (saved) {
-      setHomeLocation(JSON.parse(saved));
-    }
+    const fetchJobs = async () => {
+      setIsLoading(true);
+      try {
+        // 프록시 설정 덕분에 http://localhost:8080/api/v1/jobs 로 요청됨
+        const response = await fetch('/api/v1/jobs');
+        
+        if (!response.ok) {
+          throw new Error(`서버 오류: ${response.status}`);
+        }
+
+        const backendData: BackendJob[] = await response.json();
+
+        // DB 데이터를 UI용 Job 객체로 변환 (비동기 처리)
+        const convertedJobs = await Promise.all(
+          backendData.map(async (dbJob) => {
+            try {
+              // DB의 JSON 문자열 파싱
+              const jsonContent = JSON.parse(dbJob.jobDetailJson);
+              
+              // 기존 파서 유틸리티로 변환
+              const parsedJob = await parseJsonToJob(jsonContent);
+
+              // DB의 최신 정보(ID, Status, 회사명 등)로 덮어쓰기
+              return {
+                ...parsedJob,
+                id: dbJob.id, 
+                company: dbJob.companyName,
+                role: dbJob.roleName,
+                status: dbJob.status as JobStatus,
+              };
+            } catch (e) {
+              console.error(`공고 변환 실패 (ID: ${dbJob.id})`, e);
+              return null;
+            }
+          })
+        );
+
+        // null 값(실패한 건) 제외하고 상태 업데이트
+        setJobs(convertedJobs.filter((j): j is Job => j !== null));
+
+      } catch (error) {
+        console.error('공고 로딩 실패:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchJobs();
   }, []);
 
   // 집 위치가 설정되면 모든 공고의 대중교통 경로 계산
@@ -176,6 +220,17 @@ export function Dashboard() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FAFAFA]">
+            {isLoading && (
+              <div className="text-center py-10 text-slate-400">
+                데이터를 불러오는 중입니다...
+              </div>
+            )}
+
+            {!isLoading && jobs.length === 0 && (
+               <div className="text-center py-10 text-slate-400">
+                 등록된 공고가 없습니다.
+               </div>
+            )}
             {jobs.map(job => {
               const isLoadingRoute = loadingRoutes.has(job.id);
               
