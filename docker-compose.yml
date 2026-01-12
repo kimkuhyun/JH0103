@@ -11,6 +11,8 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
+    networks:
+      - app-network
     volumes:
       - ./infra/db/init:/docker-entrypoint-initdb.d:ro
       - db-data:/var/lib/mysql
@@ -29,6 +31,8 @@ services:
       - /app/node_modules    
     ports:
       - "5173:5173"
+    networks:
+      - app-network
     command: >
       sh -c "
         if [ ! -f package.json ]; then
@@ -50,12 +54,14 @@ services:
       context: ./services/backend-core
       target: runtime
       dockerfile: Dockerfile
-    container_name: backend_core
+    container_name: backend-core
     ports:
       - "8080:8080"
     depends_on:
       jh0103-db:
         condition: service_healthy
+    networks:
+      - app-network
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://jh0103-db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
@@ -84,18 +90,20 @@ services:
     networks:
       - app-network
 
-  auth-service-test:
-    profiles: ["auth-service-test"]
+  backend-core-test:
+    profiles: ["backend-core-test"]
     build:
-      context: ./services/auth-service
+      context: ./services/backend-core
       target: builder
       dockerfile: Dockerfile
     volumes:
-      - ./services/auth-service:/app  
+      - ./services/backend-core:/app
       - /app/build
     depends_on:
       jh0103-db:
         condition: service_healthy
+    networks:
+      - app-network
     environment:
       SPRING_DATASOURCE_URL: jdbc:mysql://jh0103-db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
