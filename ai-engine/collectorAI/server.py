@@ -123,10 +123,27 @@ def worker():
             # 4. 결과 저장 및 상태 업데이트
             if result_json:
                 # 공고 타이틀로 파일명 생성
-                title = result_json.get('job_summary', {}).get('title', f'result_{job_id}')
-                safe_title = sanitize_filename(title)
-                filename = f"{safe_title}.json"
+                summary = result_json.get('job_summary', {})
+                company = summary.get('company_name', '').strip()
+                if not company and metadata:  
+                    company = metadata.get('company', '').strip()
+
+                job_title = summary.get('title', '').strip()
+                if not job_title and metadata:
+                    job_title = metadata.get('title', '').strip()
                 
+                if company and job_title:
+                    raw_name = f"{company}_{job_title}"
+                elif job_title:
+                    raw_name = f"UnknownCompany_{job_title}"
+                elif company:
+                    raw_name = f"{company}_Untitled"
+                else:
+                    raw_name = f"result_{job_id}"
+                
+                safe_title = sanitize_filename(raw_name)
+                filename = f"{safe_title}.json"
+
                 # 파일명 중복 방지
                 filepath = os.path.join(JSON_DIR, filename)
                 counter = 1

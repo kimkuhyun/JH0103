@@ -5,18 +5,22 @@ const SITE_CONFIG = {
     'saramin.co.kr': {
         mainSelector: 'section[class*="jview-0-"]',
         iframeSelector: 'iframe.iframe_content',
+        companySelector: '.company_name, .corp_name, .tit_company',
         trash: ['#sri_header', '.jview_wing', '.jv_footer', '#sri_footer', '.wrap_recommend_slide', '.floating_banner', '.banner_job_pass', '.jv_insatong']
     },
     'jobkorea.co.kr': {
         mainSelector: '#container',
         iframeSelector: 'iframe#GI_Read_Comt_Ifrm',
+        companySelector: '.coName, .corp-name, div.tbRow.clear > div:nth-child(1)',
         trash: ['#header', '#footer', '.dev-button-list', 'aside', '#recommended-section', '#menu-buttons', '.jk-ad', 'div[class*="banner"]']
     },
     'wanted.co.kr': { 
-        mainSelector: '.JobContent_JobContent__Qb6DR', 
-        trash: ['.JobAssociated_JobAssociated__XGF86', 'nav', 'footer', 'aside'] 
+        //mainSelector: '.JobContent_JobContent__Qb6DR', 
+        mainSelector: 'div[class*="JobContent_JobContent"]',
+        //trash: ['.JobAssociated_JobAssociated__XGF86', 'nav', 'footer', 'aside'] 
+        trash: ['nav', 'footer', 'aside', 'div[class*="JobAssociated_JobAssociated"]']
     },
-    'default': { mainSelector: 'body', trash: ['header', 'footer', '.ad', '.banner'] }
+    'default': { mainSelector: 'body',companySelector: '', trash: ['header', 'footer', '.ad', '.banner'] }
 };
 
 function getConfig() {
@@ -25,6 +29,21 @@ function getConfig() {
         if (hostname.includes(site)) return SITE_CONFIG[site];
     }
     return SITE_CONFIG.default;
+}
+
+function getCompanyInfo(config) {
+    if (!config.companySelector) return "";
+    
+    try {
+        const el = document.querySelector(config.companySelector);
+        if (el) {
+            // 텍스트 정제 (줄바꿈 제거, 앞뒤 공백 제거)
+            return el.innerText.replace(/\n/g, ' ').trim();
+        }
+    } catch (e) {
+        console.warn("[CareerOS] 회사명 추출 실패", e);
+    }
+    return "";
 }
 
 // [디버깅] 소스코드 다운로드
@@ -113,18 +132,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         cleanPage(config);
 
         // 디버깅용 다운로드 (이제 메인 창에서 한 번만 실행됨)
-        downloadSourceCode();
+        //downloadSourceCode();
 
         setTimeout(() => {
             //const rawText = extractText(config);
             const bounds = getMainContentBounds(config);
             
+            const companyName = getCompanyInfo(config)
+
             sendResponse({
                 success: true,
                 bounds: bounds, // 캡처할 정확한 영역
                 metadata: {
                     url: window.location.href,
                     title: document.title,
+                    company: companyName,
                     captured_at: new Date().toISOString(),
                     //raw_text: rawText
                 }
