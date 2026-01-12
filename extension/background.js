@@ -9,16 +9,21 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function getUserEmail() {
     try {
-        // 자바 서버(8080)에 현재 로그인한 유저 정보 요청
-        const res = await fetch(USER_API_ENDPOINT);
+        // credentials: 'include' -> 쿠키(세션)를 같이 보내야 함
+        const res = await fetch(USER_API_ENDPOINT, { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include' 
+        });
+
         if (res.ok) {
             const data = await res.json();
-            return data.email; // 유저 이메일 반환
+            return data.email; // 이메일 반환
         }
     } catch (e) {
-        console.warn("[CareerOS] 유저 정보 조회 실패 (비로그인 상태 예상):", e);
+        console.warn("[CareerOS] 유저 정보 조회 실패:", e);
     }
-    return null;
+    return null; // 실패 시 null
 }
 
 
@@ -109,6 +114,13 @@ async function runAnalysis(tabId) {
     try {
         console.log(`[CareerOS] 탭(${tabId}) 분석 시작`);
 
+        const userEmail = await getUserEmail();
+        if (!userEmail) {
+            throw new Error("로그인이 필요합니다. CareerOS 웹사이트에 먼저 로그인해주세요.");
+        }
+        console.log("[CareerOS] 사용자 확인:", userEmail || "비로그인 유저");
+
+
         // 1. 페이지 정리 및 텍스트 추출 (content.js)
         const prepRes = await chrome.tabs.sendMessage(tabId, { action: 'PREPARE_CAPTURE' });
         
@@ -117,8 +129,6 @@ async function runAnalysis(tabId) {
         // 2. bounds 정보를 사용하여 정확한 영역 캡처
         const imageBase64 = await captureFullPage(tabId, prepRes.bounds);
 
-        const userEmail = await getUserEmail();
-        console.log("[CareerOS] 사용자 확인:", userEmail || "비로그인 유저");
 
         // 3. 서버 전송
         const payload = {

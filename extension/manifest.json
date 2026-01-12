@@ -14,7 +14,10 @@
   ],
   "host_permissions": [
     "http://localhost:5000/*",
-    "<all_urls>"
+    "http://localhost:8080/*",
+    "*://*.saramin.co.kr/*",
+    "*://*.jobkorea.co.kr/*",
+    "*://*.wanted.co.kr/*"
   ],
   "background": {
     "service_worker": "background.js"
