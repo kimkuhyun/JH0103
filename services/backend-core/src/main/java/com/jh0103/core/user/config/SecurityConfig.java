@@ -11,7 +11,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.http.HttpStatus;
-
+import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
@@ -29,6 +29,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .headers(headers -> headers.frameOptions(frame -> frame.disable()))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.POST, "/api/v1/jobs/**").permitAll()
                 .requestMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**").permitAll()
                 .anyRequest().authenticated()
             )
