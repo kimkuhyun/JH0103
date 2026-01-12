@@ -1,22 +1,28 @@
 package com.jh0103.core.job.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper; 
 import com.jh0103.core.job.domain.Job;
 import com.jh0103.core.job.repository.JobRepository;
+import com.jh0103.core.user.domain.User;
+import com.jh0103.core.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j; 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.jh0103.core.user.domain.User;         
-import com.jh0103.core.user.repository.UserRepository; 
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class JobService {
 
     private final JobRepository jobRepository;
     private final UserRepository userRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public Long saveJobFromAi(Map<String, Object> requestData) {
@@ -38,6 +44,13 @@ public class JobService {
             }
         }
 
+        String jsonString = "{}";
+        try {
+            jsonString = objectMapper.writeValueAsString(summary);
+        } catch (JsonProcessingException e) {
+            log.error("JSON 변환 실패", e);
+        }
+
         // 2. 엔티티 생성
         Job job = Job.builder()
                 .userId(userId) // 임시: 1번 유저 (나중에 로그인 연동 시 변경)
@@ -45,7 +58,7 @@ public class JobService {
                 .roleName((String) summary.getOrDefault("title", "Untitled Role"))
                 .status("INBOX")
                 .originalUrl(originalUrl)
-                .jobDetailJson(summary.toString()) // 전체 JSON 백업
+                .jobDetailJson(jsonString)// 전체 JSON 백업
                 .screenshot(imageBase64) // 📸 스크린샷 저장
                 .build();
 
