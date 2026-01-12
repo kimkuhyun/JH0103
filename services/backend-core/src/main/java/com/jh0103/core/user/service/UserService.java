@@ -11,8 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService{
     private final UserRepository userRepository;
 
-    @Transactional(readOnly = true){
+    @Transactional(readOnly = true)
+    public User getUserById(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 회원입니다. id=" + userId));
+                .orElseThrow(() -> new IllegalArgumentException("해당 유저가 없습니다. id=" + userId));
     }
 }

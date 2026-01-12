@@ -9,6 +9,7 @@ import com.jh0103.core.user.domain.User;
 import com.jh0103.core.user.repository.UserRepository; 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
