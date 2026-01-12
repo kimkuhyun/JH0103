@@ -29,6 +29,7 @@ for d in [BASE_DIR, IMAGE_DIR, JSON_DIR]:
 
 # Ollama 설정 (Docker 내부 통신용)
 OLLAMA_URL = "http://host.docker.internal:11434/api/generate"
+BACKEND_API_URL = "http://backend-core:8080/api/v1/jobs"
 
 # 작업 큐
 job_queue = queue.Queue()
@@ -106,7 +107,7 @@ def worker():
     print("[워커] 시작됨...")
     while True:
         try:
-            job_id, image_data, url, metadata = job_queue.get()
+            job_id, image_data, url, metadata, user_email = job_queue.get()
             
             print(f"[워커] 작업 시작: {job_id}")
             
@@ -122,6 +123,18 @@ def worker():
             
             # 4. 결과 저장 및 상태 업데이트
             if result_json:
+                try:
+                    payload = {
+                        "job_summary": result_json,
+                        "url": url,
+                        "image_base64": image_data,
+                        "user_email": user_email
+                    }
+                    requests.post(BACKEND_API_URL, json=payload)
+                    print(f"[워커] 자바 서버 전송 완료")
+                except Exception as e:
+                    print(f"[워커] 자바 서버 전송 실패: {e}")
+
                 # 공고 타이틀로 파일명 생성
                 summary = result_json.get('job_summary', {})
                 company = summary.get('company_name', '').strip()
@@ -188,7 +201,8 @@ def api_analyze():
         image_base64 = data.get('pdf') 
         url = data.get('url')
         metadata = data.get('metadata', {})
-        
+        user_email = data.get('user_email')
+
         if not image_base64:
             return jsonify({"error": "No image data"}), 400
             
@@ -198,7 +212,7 @@ def api_analyze():
             job_results[job_id] = {"status": "processing"}
             
         # 큐에 작업 등록
-        job_queue.put((job_id, image_base64, url, metadata))
+        job_queue.put((job_id, image_base64, url, metadata, user_email))
         
         return jsonify({"status": "queued", "job_id": job_id})
         

@@ -2,9 +2,28 @@
 
 const API_ENDPOINT = 'http://localhost:5000/analyze';
 const STATUS_ENDPOINT = 'http://localhost:5000/status';
+const USER_API_ENDPOINT = 'http://localhost:8080/api/v1/user';
 
 // 유틸리티: 대기 함수
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function getUserEmail() {
+    try {
+        // 자바 서버(8080)에 현재 로그인한 유저 정보 요청
+        const res = await fetch(USER_API_ENDPOINT);
+        if (res.ok) {
+            const data = await res.json();
+            return data.email; // 유저 이메일 반환
+        }
+    } catch (e) {
+        console.warn("[CareerOS] 유저 정보 조회 실패 (비로그인 상태 예상):", e);
+    }
+    return null;
+}
+
+
+
+
 
 // [핵심 1] Chrome DevTools Protocol(CDP)을 이용한 전체 화면 캡처
 async function captureFullPage(tabId, bounds = null) {
@@ -98,15 +117,15 @@ async function runAnalysis(tabId) {
         // 2. bounds 정보를 사용하여 정확한 영역 캡처
         const imageBase64 = await captureFullPage(tabId, prepRes.bounds);
 
-        // 디버깅: 캡처된 이미지 확인
-        chrome.tabs.create({ url: "data:image/jpeg;base64," + imageBase64, active: false });
-        console.log("[CareerOS] 캡처된 이미지를 새 탭에 띄웠습니다.");
+        const userEmail = await getUserEmail();
+        console.log("[CareerOS] 사용자 확인:", userEmail || "비로그인 유저");
 
         // 3. 서버 전송
         const payload = {
             pdf: imageBase64, // 변수명 호환성 유지
             url: prepRes.metadata.url,
-            metadata: prepRes.metadata
+            metadata: prepRes.metadata,
+            user_email: userEmail
         };
 
         const res = await fetch(API_ENDPOINT, {
