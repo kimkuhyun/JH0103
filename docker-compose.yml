@@ -45,12 +45,12 @@ services:
         npm run dev -- --host
       "
 
-  auth-service:
+  backend-core:
     build:
-      context: ./services/auth-service
+      context: ./services/backend-core
       target: runtime
       dockerfile: Dockerfile
-    container_name: auth_service
+    container_name: backend_core
     ports:
       - "8080:8080"
     depends_on:
