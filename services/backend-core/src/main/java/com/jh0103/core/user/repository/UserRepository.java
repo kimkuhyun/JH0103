@@ -1,6 +1,6 @@
-package com.jh0103.authservice.repository;
+package com.jh0103.core.user.repository;
 
-import com.jh0103.authservice.domain.User;
+import com.jh0103.core.user.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 

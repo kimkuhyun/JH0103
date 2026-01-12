@@ -1,6 +1,6 @@
-package com.jh0103.authservice.controller;
+package com.jh0103.core.user.controller;
 
-import com.jh0103.authservice.dto.SessionUser;
+import com.jh0103.core.user.dto.SessionUser;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

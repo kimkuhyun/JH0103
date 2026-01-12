@@ -1,6 +1,6 @@
-package com.jh0103.authservice.config;
+package com.jh0103.core.user.config;
 
-import com.jh0103.authservice.service.CustomOAuth2UserService;
+import com.jh0103.core.user.service.CustomOAuth2UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

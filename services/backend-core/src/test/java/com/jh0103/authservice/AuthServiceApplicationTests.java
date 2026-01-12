@@ -1,4 +1,4 @@
-package com.jh0103.authservice;
+package com.jh0103.core.user;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

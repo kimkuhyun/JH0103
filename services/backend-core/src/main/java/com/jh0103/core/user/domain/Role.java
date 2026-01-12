@@ -1,4 +1,4 @@
-package com.jh0103.authservice.domain;
+package com.jh0103.core.user.domain;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

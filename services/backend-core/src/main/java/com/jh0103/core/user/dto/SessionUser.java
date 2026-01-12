@@ -1,6 +1,6 @@
-package com.jh0103.authservice.dto;
+package com.jh0103.core.user.dto;
 
-import com.jh0103.authservice.domain.User;
+import com.jh0103.core.user.domain.User;
 import lombok.Getter;
 import java.io.Serializable;
 

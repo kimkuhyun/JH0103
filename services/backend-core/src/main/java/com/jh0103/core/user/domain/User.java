@@ -1,4 +1,4 @@
-package com.jh0103.authservice.domain;
+package com.jh0103.core.user.domain;
 
 import jakarta.persistence.*;
 import lombok.Getter;

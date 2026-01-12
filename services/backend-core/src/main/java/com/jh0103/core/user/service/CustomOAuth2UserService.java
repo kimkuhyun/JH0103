@@ -1,9 +1,9 @@
-package com.jh0103.authservice.service;
+package com.jh0103.core.user.service;
 
-import com.jh0103.authservice.domain.User;
-import com.jh0103.authservice.dto.OAuthAttributes;
-import com.jh0103.authservice.dto.SessionUser;
-import com.jh0103.authservice.repository.UserRepository;
+import com.jh0103.core.user.domain.User;
+import com.jh0103.core.user.dto.OAuthAttributes;
+import com.jh0103.core.user.dto.SessionUser;
+import com.jh0103.core.user.repository.UserRepository;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;

@@ -1,4 +1,4 @@
-package com.jh0103.authservice;
+package com.jh0103.core.user;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
