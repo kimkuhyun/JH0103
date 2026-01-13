@@ -110,6 +110,7 @@ def worker():
             job_id, image_data, url, metadata, user_email = job_queue.get()
             
             print(f"[워커] 작업 시작: {job_id}")
+            print(f"[워커] 모델 이름: {MODEL_CONFIG['MODEL_NAME']}")
             
             # 1. 이미지 최적화
             optimized_img = optimize_image(image_data)

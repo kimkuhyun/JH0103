@@ -14,10 +14,10 @@ IMAGE_CONFIG = {
 # 모델 설정
 MODEL_CONFIG = {
     "MODEL_NAME": "qwen2.5vl", # 또는 사용 중인 모델명
-    "NUM_CTX": 6000,        # 컨텍스트 윈도우 (이미지+텍스트 고려)
+    "NUM_CTX": 10000,        # 컨텍스트 윈도우 (이미지+텍스트 고려)
     "NUM_BATCH": 256,
     "TEMPERATURE": 0,       # 정확도 우선
-    "TIMEOUT": 120          # 타임아웃 넉넉하게 설정
+    "TIMEOUT": 240          # 타임아웃 넉넉하게 설정
 }
 
 # 채용공고 분석 프롬프트
