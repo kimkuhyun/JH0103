@@ -27,26 +27,43 @@ public class JobService {
     @Transactional
     public Long saveJobFromAi(Map<String, Object> requestData) {
         // 1. 데이터 추출 
-        Map<String, Object> summary = (Map<String, Object>) requestData.get("job_summary");
+        Map<String, Object> fullData = (Map<String, Object>) requestData.get("job_summary");
         String originalUrl = (String) requestData.get("url");
         String imageBase64 = (String) requestData.get("image_base64"); 
-
         String userEmail = (String) requestData.get("user_email");
-        Long userId = 1L; // 기본값 (Fallback)
 
+        String companyName = "Unknown Company";
+        String roleName = "Untitled Role";
+
+        if (fullData != null) {
+            // 회사명 추출: company_info -> name
+            Map<String, Object> companyInfo = (Map<String, Object>) fullData.get("company_info");
+            if (companyInfo != null) {
+                String rawName = (String) companyInfo.getOrDefault("name", companyName);
+                companyName = rawName.replaceAll("(^\\s*[\\(（]주[\\)）]\\s*)|(\\s*[\\(（]주[\\)）]\\s*$)|(^\\s*주식회사\\s*)|(\\s*주식회사\\s*$)", "").trim();
+            }
+
+            // 공고명 추출: job_summary -> title
+            Map<String, Object> jobSummary = (Map<String, Object>) fullData.get("job_summary");
+            if (jobSummary != null) {
+                roleName = (String) jobSummary.getOrDefault("title", roleName);
+            }
+        }
+
+        Long userId = 1L;
         if (userEmail != null && !userEmail.isEmpty()) {
             Optional<User> user = userRepository.findByEmail(userEmail);
             if (user.isPresent()) {
                 userId = user.get().getId();
             } else {
-                System.out.println("⚠️ 해당 이메일의 유저를 찾을 수 없음: " + userEmail);
-                // 필요시 여기서 새 유저 생성
+                log.warn("⚠️ 유저 찾기 실패: {}", userEmail);
             }
         }
 
+        // 4. JSON 문자열 변환
         String jsonString = "{}";
         try {
-            jsonString = objectMapper.writeValueAsString(summary);
+            jsonString = objectMapper.writeValueAsString(fullData);
         } catch (JsonProcessingException e) {
             log.error("JSON 변환 실패", e);
         }
@@ -54,8 +71,8 @@ public class JobService {
         // 2. 엔티티 생성
         Job job = Job.builder()
                 .userId(userId) // 임시: 1번 유저 (나중에 로그인 연동 시 변경)
-                .companyName((String) summary.getOrDefault("company_name", "Unknown Company"))
-                .roleName((String) summary.getOrDefault("title", "Untitled Role"))
+                .companyName(companyName) 
+                .roleName(roleName)
                 .status("INBOX")
                 .originalUrl(originalUrl)
                 .jobDetailJson(jsonString)// 전체 JSON 백업
@@ -70,5 +87,9 @@ public class JobService {
     @Transactional(readOnly = true)
     public List<Job> getAllJobs() {
         return jobRepository.findAllByOrderByCreatedAtDesc();
+    }
+    @Transactional
+    public void deleteJob(Long jobId) {
+        jobRepository.deleteById(jobId);
     }
 }
