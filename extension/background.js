@@ -94,7 +94,7 @@ async function captureFullPage(tabId, bounds = null) {
 // [핵심 2] 서버 상태 확인 (Polling)
 async function pollStatus(jobId) {
     let attempts = 0;
-    const maxAttempts = 60; // 60초 대기
+    const maxAttempts = 180; // 60초 대기
 
     while (attempts < maxAttempts) {
         try {

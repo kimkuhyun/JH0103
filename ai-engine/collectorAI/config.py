@@ -6,7 +6,7 @@ CareerOS Collector AI - 설정 및 프롬프트
 
 # 이미지 처리 설정
 IMAGE_CONFIG = {
-    "MAX_WIDTH": 1000,      # AI 처리를 위한 이미지 최대 너비 리사이징
+    "MAX_WIDTH": 768,      # AI 처리를 위한 이미지 최대 너비 리사이징
     "QUALITY": 80,          # JPEG 품질
     "FORMAT": "JPEG"
 }
