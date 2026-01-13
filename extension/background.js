@@ -33,25 +33,22 @@ async function getUserEmail() {
 // [핵심 1] Chrome DevTools Protocol(CDP)을 이용한 전체 화면 캡처
 async function captureFullPage(tabId, bounds = null) {
     try {
-        // 1. 디버거 연결
         await chrome.debugger.attach({ tabId }, "1.3");
 
-        // 2. 전체 페이지 높이 계산
+        // 1. 전체 페이지 크기 계산 (이걸로 뷰포트를 고정해야 레이아웃이 안 깨짐)
         const layoutMetrics = await chrome.debugger.sendCommand({ tabId }, "Page.getLayoutMetrics");
-        
-        // bounds가 있으면 해당 영역 기준, 없으면 전체 페이지 기준
-        const width = bounds ? bounds.width : Math.ceil(layoutMetrics.contentSize.width);
-        const height = bounds ? bounds.height : Math.ceil(layoutMetrics.contentSize.height);
+        const fullWidth = Math.ceil(layoutMetrics.contentSize.width);
+        const fullHeight = Math.ceil(layoutMetrics.contentSize.height);
 
-        // 3. 뷰포트 강제 확장 (스크롤 없이 전체가 보이게 설정)
+        // 2. 뷰포트 설정: 무조건 '전체 크기'로 설정 (bounds 크기로 줄이지 않음!)
         await chrome.debugger.sendCommand({ tabId }, "Emulation.setDeviceMetricsOverride", {
-            width: width,
-            height: height,
+            width: fullWidth,
+            height: fullHeight,
             deviceScaleFactor: 1,
             mobile: false,
         });
 
-        // 4. 캡처 옵션 설정
+        // 3. 캡처 옵션 설정
         const captureOptions = {
             format: "jpeg",
             quality: 80, 
@@ -59,7 +56,7 @@ async function captureFullPage(tabId, bounds = null) {
             fromSurface: true
         };
         
-        // bounds가 있으면 clip 설정 추가
+        // 4. 여기서만 bounds를 사용해 '오려내기' (Clip)
         if (bounds) {
             captureOptions.clip = {
                 x: bounds.x,
@@ -68,21 +65,28 @@ async function captureFullPage(tabId, bounds = null) {
                 height: bounds.height,
                 scale: 1
             };
+        } else {
+            // bounds가 없으면 전체 캡처
+            captureOptions.clip = {
+                x: 0,
+                y: 0,
+                width: fullWidth,
+                height: fullHeight,
+                scale: 1
+            };
         }
 
-        // 5. 캡처 실행
         const result = await chrome.debugger.sendCommand({ tabId }, "Page.captureScreenshot", captureOptions);
 
-        // 6. 설정 원상복구
         await chrome.debugger.sendCommand({ tabId }, "Emulation.clearDeviceMetricsOverride");
 
-        return result.data; // Base64 이미지 데이터
+        return result.data; 
 
     } catch (e) {
         console.error("Capture failed:", e);
+        try { await chrome.debugger.detach({ tabId }); } catch(err) {}
         throw e;
     } finally {
-        // 디버거 연결 해제 (필수)
         try { await chrome.debugger.detach({ tabId }); } catch(e) {}
     }
 }
