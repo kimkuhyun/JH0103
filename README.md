@@ -12,6 +12,7 @@
     - [Services (Auth Backend)](#25-services-auth-backend)
     - [Infra (Database)](#26-infra-database)
 3. [아키텍처 및 로드맵](#3-아키텍처-및-로드맵)
+4. [최근 변경사항 (v5.0)](#4-최근-변경사항-v50)
 
 ---
 
@@ -58,13 +59,14 @@ React 기반의 웹 애플리케이션 소스 코드입니다. 경로: `UI/`
     * `TransitRouteOverlay.tsx`: 대중교통 경로를 지도 위에 오버레이로 표시하는 컴포넌트.
 * **src/components/settings/HomeLocationSettings.tsx**: 사용자의 거주지(출퇴근 기준점) 설정 화면.
 * **src/components/views/AuthView.tsx**: 로그인, 회원가입, 계정 찾기 화면. 유효성 검사 로직(`usernameIssue` 등) 포함.
+* **src/components/job/DynamicJobDetail.tsx**: (v5.0 신규) 동적 공고 상세 표시 컴포넌트. 다양한 JSON 구조를 렌더링.
 
 **Data & Logic**
-* **src/pages/Dashboard.tsx**: 메인 대시보드 화면. 수집된 공고 요약 및 주요 지표 표시.
+* **src/pages/Dashboard.tsx**: 메인 대시보드 화면. 수집된 공고 요약 및 동적 상세 표시. v5.0에서 `DynamicJobDetail` 컴포넌트 통합.
 * **src/mockdata/mockData.ts**: UI 프로토타이핑을 위한 더미 데이터 모음.
-* **src/types/index.ts**: 앱 전역에서 사용되는 TypeScript 인터페이스 정의(Job, User 등).
+* **src/types/index.ts**: 앱 전역에서 사용되는 TypeScript 인터페이스 정의(Job, User, JobJsonV2 등). v5.0에서 새로운 JSON 구조 타입 추가.
 * **src/utils/**: 핵심 비즈니스 로직.
-    * `jobParser.ts`: 업로드된 JSON 데이터를 앱 내부 모델(`Job`)로 변환하고 결측치를 처리하는 파서.
+    * `jobParser.ts`: 업로드된 JSON 데이터를 앱 내부 모델(`Job`)로 변환하고 결측치를 처리하는 파서. v5.0에서 다중 포지션 지원 추가.
     * `odsayApi.ts`: 대중교통 길찾기 정보 조회 API (ODsay) 연동 모듈.
 
 ### 2.3 AI Engine (Collector)
@@ -72,12 +74,14 @@ React 기반의 웹 애플리케이션 소스 코드입니다. 경로: `UI/`
 
 * **Dockerfile**: AI 서버 컨테이너 빌드 명세.
 * **requirements.txt**: Python 의존성 패키지 목록 (Flask, Pillow, Requests 등).
-* **config.py**: AI 모델 설정 및 프롬프트 관리 모듈. 이미지 최적화 파라미터, LLM 컨텍스트 크기, 프롬프트 템플릿 정의.
+* **config.py**: AI 모델 설정 및 프롬프트 관리 모듈. 이미지 최적화 파라미터, LLM 컨텍스트 크기, 프롬프트 템플릿 정의. v5.0에서 프롬프트 대폭 개선.
 * **server.py**: 메인 서버 스크립트.
     * `optimize_image()`: 분석 전 이미지 최적화 및 리사이징. 메모리 사용량 70% 감소.
     * `sanitize_filename()`: 공고 타이틀을 안전한 파일명으로 변환.
     * `analyze_with_ollama()`: 로컬 LLM(Ollama)에 이미지 분석 요청 및 JSON 응답 파싱.
     * `worker()`: 비동기 작업 큐 처리. 이미지 최적화, AI 분석, 파일 저장을 백그라운드에서 수행.
+    * `extract_company_name()`: (v5.0 신규) 회사명 추출 로직. AI 분석 결과 우선, 메타데이터 대체.
+    * `generate_filename()`: (v5.0 신규) 회사명 기반 파일명 생성. 다중 포지션 지원.
 
 #### 최근 성능 개선 (v4.0)
 * **메모리 최적화**: 이미지 처리 메모리 사용량 70% 감소 (PDF scale 2.0 → 1.0).
@@ -178,3 +182,86 @@ React 기반의 웹 애플리케이션 소스 코드입니다. 경로: `UI/`
 * **처리 속도 최적화**: 이미지 인식 시간 10초 이내 목표 달성을 위한 모델 최적화 및 병렬 처리 도입.
 * **순차 처리 로직**: 여러 공고 동시 요청 시 큐 기반 순차 처리 및 상태 관리 시스템 구축.
 * **UX 개선**: 토스트 스택 시스템을 통한 실시간 작업 상태 피드백 및 캡처 중 페이지 이탈 방지 안내 추가.
+
+---
+
+## 4. 최근 변경사항 (v5.0)
+
+### 4.1 동적 공고 표시 시스템 (2026-01-14)
+
+#### 4.1.1 AI 프롬프트 개선
+**파일**: `ai-engine/collectorAI/config.py`
+* **다양한 공고 형태 지원**: 여러 포지션, 긴/짧은 회사 소개, 유무가 다른 자격요건 등 모든 공고 형태를 수용
+* **유연한 JSON 구조**: 필수 필드 최소화, positions 배열로 다중 포지션 지원
+* **회사명 강제 추출**: 회사명을 필수로 추출하도록 지침 강화
+* **메타정보 확장**: industry_domain, source_platform, employee_count, established 등 추가
+* **복리후생/전형절차/기업문화**: 발견되는 모든 정보를 배열로 추출
+* **주소 정제 지침**: 건물명, 호수, 층수, 우편번호, 역거리 제외 명시
+
+#### 4.1.2 파일명 생성 로직 강화
+**파일**: `ai-engine/collectorAI/server.py`
+* **회사명 우선순위 명확화**: AI 분석 결과 > 메타데이터 순으로 회사명 추출
+* **다중 포지션 표시**: "첫번째포지션_외N건" 형식으로 파일명 생성
+* **extract_company_name()**: 회사명 추출 전용 함수 모듈화
+* **generate_filename()**: 파일명 생성 로직 모듈화 및 구버전 호환성 유지
+
+#### 4.1.3 타입 시스템 확장
+**파일**: `UI/src/types/index.ts`
+* **JobJsonV2 인터페이스**: 새로운 JSON 구조 (positions, company_info, timeline, benefits, culture 등)
+* **Job.rawJson**: 원본 JSON 데이터 보관 필드 추가
+* **구버전 호환성**: job_summary, analysis 등 기존 필드 유지
+
+#### 4.1.4 파서 로직 리팩토링
+**파일**: `UI/src/utils/jobParser.ts`
+* **신버전 우선 처리**: positions 배열 구조를 우선 파싱
+* **구버전 fallback**: job_summary/analysis 구조 호환성 유지
+* **다중 포지션 표시**: "포지션명 외 N건" 형식으로 role 표시
+* **급여 정보 통합**: salary 객체의 type, amount, details 통합
+
+#### 4.1.5 동적 렌더링 컴포넌트
+**파일**: `UI/src/components/job/DynamicJobDetail.tsx` (신규)
+* **완전 동적 렌더링**: 모든 JSON 구조를 동적으로 파싱하여 표시
+* **섹션별 색상 구분**: 회사정보(slate), 업무(teal), 자격(red/green), 기술(indigo), 급여(green), 전형(amber), 복리후생(pink), 문화(violet)
+* **다중 포지션 지원**: positions 배열의 각 포지션을 개별 카드로 표시
+* **메타정보 강조**: 회사 정보를 상단에 박스 형태로 명확히 표시
+
+#### 4.1.6 대시보드 통합
+**파일**: `UI/src/pages/Dashboard.tsx`
+* **DynamicJobDetail 통합**: 기존 고정 필드 표시를 동적 컴포넌트로 대체
+* **상세 패널 확장**: 450px -> 500px로 너비 확장 (더 많은 정보 표시)
+* **주소 정제 개선**: positions 구조에서도 주소 추출 가능
+* **코드 간소화**: 중복 로직 제거, 가독성 향상
+
+### 4.2 주요 개선 효과
+
+#### 공고 수용력 향상
+* **이전**: 고정된 필드만 표시, 다양한 공고 형태 미지원
+* **이후**: 모든 JSON 구조를 동적으로 렌더링, 다중 포지션/복리후생/전형절차 등 완벽 지원
+
+#### 정보 손실 방지
+* **이전**: JSON에 있어도 UI에 표시되지 않는 정보 다수
+* **이후**: 원본 JSON의 모든 정보를 섹션별로 분류하여 표시
+
+#### 유지보수성 향상
+* **이전**: 새로운 필드 추가 시 Dashboard.tsx 수정 필요
+* **이후**: JSON 구조만 맞으면 자동으로 렌더링
+
+#### 사용자 경험 개선
+* **이전**: 공고마다 표시되는 정보가 일관되지 않음
+* **이후**: 공고에 있는 모든 정보를 체계적으로 표시, 섹션별 색상 구분으로 가독성 향상
+
+### 4.3 이전 버전 호환성
+* **구버전 JSON 구조 완벽 지원**: job_summary, analysis 기반의 기존 JSON도 정상 작동
+* **점진적 마이그레이션**: 신규 공고는 v2.0 구조, 기존 공고는 v1.0 구조로 혼용 가능
+* **fallback 로직**: 필드가 없을 경우 기본값 또는 빈 배열로 처리
+
+### 4.4 알려진 제약사항
+* **소형 모델 한계**: 현재 사용 중인 Ollama 모델은 복잡한 공고에서 일부 정보를 누락할 수 있음
+* **주소 정제**: 완벽한 주소 정제가 어려운 경우 지오코딩 실패 가능
+* **토큰 제한**: 매우 긴 공고(6000자 이상)는 raw_text가 잘릴 수 있음
+
+### 4.5 향후 개선 계획
+* **프롬프트 최적화**: Few-shot 예제 추가, 검증 로직 강화
+* **모델 업그레이드**: 더 큰 모델 또는 GPT-4V 통합 고려
+* **실시간 검증**: AI 분석 결과의 필수 필드 검증 및 재시도 로직
+* **사용자 피드백**: 분석 결과에 대한 사용자 수정 기능 추가
