@@ -41,43 +41,45 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
   return (
     <div className="space-y-6">
       {/* 회사 정보 (메타정보) */}
-      {companyInfo && (
+      {companyInfo && companyInfo.description && (
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-          <div className="flex items-start gap-3 mb-3">
-            <Building2 className="w-5 h-5 text-teal-600 mt-0.5" />
+          <div className="flex items-start gap-3">
+            <Building2 className="w-5 h-5 text-teal-600 mt-0.5 shrink-0" />
             <div className="flex-1">
               <h4 className="font-bold text-slate-800 mb-1">{companyName}</h4>
               {companyInfo.business_type && (
                 <p className="text-xs text-slate-500 mb-2">{companyInfo.business_type}</p>
               )}
-              {companyInfo.description && (
-                <p className="text-sm text-slate-600 leading-relaxed line-clamp-3">
-                  {companyInfo.description}
-                </p>
-              )}
+              {/* ✅ line-clamp-3 제거 - 회사 소개 전체 표시 */}
+              <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                {companyInfo.description}
+              </p>
             </div>
           </div>
           
-          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-200">
-            {companyInfo.employee_count && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Users size={14} />
-                <span>{companyInfo.employee_count}</span>
-              </div>
-            )}
-            {companyInfo.established && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <Calendar size={14} />
-                <span>설립 {companyInfo.established}</span>
-              </div>
-            )}
-            {companyInfo.location && (
-              <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                <MapPin size={14} />
-                <span>{companyInfo.location}</span>
-              </div>
-            )}
-          </div>
+          {/* 회사 메타 정보 */}
+          {(companyInfo.employee_count || companyInfo.established || companyInfo.location) && (
+            <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-200">
+              {companyInfo.employee_count && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Users size={14} />
+                  <span>{companyInfo.employee_count}</span>
+                </div>
+              )}
+              {companyInfo.established && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <Calendar size={14} />
+                  <span>설립 {companyInfo.established}</span>
+                </div>
+              )}
+              {companyInfo.location && (
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <MapPin size={14} />
+                  <span>{companyInfo.location}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       
@@ -269,8 +271,7 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
                 <span key={idx} className="px-3 py-1.5 bg-white text-violet-700 text-xs font-bold rounded-lg border border-violet-200">
                   #{keyword}
                 </span>
-              ))}
-            </div>
+              ))}\n            </div>
           )}
           {culture.description && (
             <p className="text-sm text-slate-600 leading-relaxed mt-2">
