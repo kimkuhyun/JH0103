@@ -98,28 +98,28 @@ ANALYSIS_PROMPT_TEMPLATE = """
 예: {"remote_work": true, "relocation_support": false, "visa_sponsorship": true}
 
 [JSON 스키마 - 유연한 구조]
-{{
-  "meta": {{
-    "url": "{url}",
-    "captured_at": "{date}",
+{
+  "meta": {
+    "url": "__URL__",
+    "captured_at": "__DATE__",
     "industry_domain": "업종",
     "source_platform": "플랫폼명"
-  }},
-  "company_info": {{
+  },
+  "company_info": {
     "name": "**회사명 (필수)**",
     "description": "회사 소개",
     "employee_count": "직원 수",
     "business_type": "사업 분야",
     "established": "설립연도",
     "location": "본사 위치"
-  }},
-  "timeline": {{
+  },
+  "timeline": {
     "deadline_date": "YYYY-MM-DD 또는 null",
     "deadline_text": "마감일 원문",
     "posted_date": "게시일"
-  }},
+  },
   "positions": [
-    {{
+    {
       "title": "포지션명",
       "employment_type": "고용 형태",
       "experience_required": "경력 요건",
@@ -129,26 +129,26 @@ ANALYSIS_PROMPT_TEMPLATE = """
       "preferred_qualifications": ["우대사항"],
       "tech_stack": ["기술스택"],
       "tools": ["도구"],
-      "salary": {{
+      "salary": {
         "type": "급여 타입",
         "amount": "금액",
         "details": "상세"
-      }},
-      "working_conditions": {{
+      },
+      "working_conditions": {
         "location": "근무지",
         "work_hours": "근무 시간",
         "work_type": "근무 형태"
-      }}
-    }}
+      }
+    }
   ],
   "hiring_process": ["전형1", "전형2"],
   "benefits": ["복리후생1", "복리후생2"],
-  "culture": {{
+  "culture": {
     "keywords": ["키워드1"],
     "description": "문화 설명"
-  }},
-  "additional_info": {{}}
-}}
+  },
+  "additional_info": {}
+}
 
 [특별 지침]
 1. **주소 정제**: 근무지 주소는 도로명 주소만 추출하고, 건물명, 호수, 층수, 우편번호, 지하철 역에서의 거리는 제외하세요.
@@ -166,7 +166,7 @@ ANALYSIS_PROMPT_TEMPLATE = """
 4. **애매한 정보**: 확실하지 않으면 "추정: ..." 또는 "명시되지 않음" 등으로 표기
 
 [추출된 텍스트 데이터]
-{raw_text_hint}
+__RAW_TEXT_HINT__
 """
 
 def get_analysis_prompt(url, date, metadata):
@@ -176,8 +176,8 @@ def get_analysis_prompt(url, date, metadata):
     if len(raw_text) > 6000:
         raw_text = raw_text[:6000] + "...(생략)"
         
-    return ANALYSIS_PROMPT_TEMPLATE.format(
-        url=url,
-        date=date,
-        raw_text_hint=raw_text
-    )
+    prompt = ANALYSIS_PROMPT_TEMPLATE.replace("__URL__", url)
+    prompt = prompt.replace("__DATE__", date)
+    prompt = prompt.replace("__RAW_TEXT_HINT__", raw_text)
+    
+    return prompt
