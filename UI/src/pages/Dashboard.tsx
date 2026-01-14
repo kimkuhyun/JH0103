@@ -378,12 +378,16 @@ export function Dashboard() {
                   </div>
                 )}
 
-                {/* 동적 공고 상세 표시 */}
-                {selectedJob.rawJson && (
+                {/* 동적 공고 상세 표시 - rawJson이 있을 때만 렌더링 */}
+                {selectedJob.rawJson ? (
                   <DynamicJobDetail 
                     rawJson={selectedJob.rawJson} 
                     companyName={selectedJob.company}
                   />
+                ) : (
+                  <div className="text-center py-10 text-slate-400">
+                    상세 정보를 불러올 수 없습니다.
+                  </div>
                 )}
 
                 <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2 mt-8">
