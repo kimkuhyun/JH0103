@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Job, JobStatus, BackendJob } from '../types/index';
 import { KakaoMapContainer } from '../components/map/KakaoMapContainer';
-import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Briefcase, Code2, Building2, Home as HomeIcon, Settings, Maximize2, Trash2} from 'lucide-react';
+import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Building2, Home as HomeIcon, Maximize2, Trash2, Briefcase} from 'lucide-react';
 import { parseJsonToJob } from '../utils/jobParser';
 import { HomeLocationSettings } from '../components/settings/HomeLocationSettings';
 import { searchTransitRoute, formatRouteInfo } from '../utils/odsayApi';
 import type { TransitRoute } from '../utils/odsayApi';
+import { DynamicJobDetail } from '../components/job/DynamicJobDetail';
 
 interface HomeLocation {
   address: string;
@@ -26,12 +27,11 @@ export function Dashboard() {
   const selectedJob = jobs.find(j => j.id === selectedJobId);
 
   const [isScreenshotOpen, setIsScreenshotOpen] = useState(false);
-  // 로컬스토리지에서 집 위치 불러오기
+  
   useEffect(() => {
     const fetchJobs = async () => {
       setIsLoading(true);
       try {
-        // 프록시 설정 덕분에 http://localhost:8080/api/v1/jobs 로 요청됨
         const response = await fetch('/api/v1/jobs');
         
         if (!response.ok) {
@@ -40,22 +40,23 @@ export function Dashboard() {
 
         const backendData: BackendJob[] = await response.json();
 
-        // DB 데이터를 UI용 Job 객체로 변환 (비동기 처리)
         const convertedJobs = await Promise.all(
           backendData.map(async (dbJob) => {
             try {
-              // DB의 JSON 문자열 파싱
               const jsonContent = JSON.parse(dbJob.jobDetailJson);
               
-              // 기존 파서 유틸리티로 변환
+              // 주소 정제 로직
               let rawLocation = "";
               if (jsonContent.analysis?.working_conditions?.location) {
                 rawLocation = jsonContent.analysis.working_conditions.location;
+              } else if (jsonContent.positions?.[0]?.working_conditions?.location) {
+                rawLocation = jsonContent.positions[0].working_conditions.location;
               }
+              
               let cleanLocation = rawLocation
-                .replace(/^(근무지|주소|위치|근무장소)[:\s]*/g, '') // "근무지:" 제거
-                .replace(/\(.*?\)/g, '')  // (삼성역 도보 5분) 제거
-                .replace(/\[.*?\]/g, '')  // [강남구] 제거
+                .replace(/^(근무지|주소|위치|근무장소)[:\s]*/g, '')
+                .replace(/\(.*?\)/g, '')
+                .replace(/\[.*?\]/g, '')
                 .trim();
               
               const addressMatch = cleanLocation.match(/([가-힣A-Za-z0-9\s\-\.]+(?:로|길|동|가|읍|면|리)\s*\d+(?:-\d+)?)/);
@@ -63,11 +64,17 @@ export function Dashboard() {
               if (addressMatch) {
                 cleanLocation = addressMatch[0].trim();
               }
+              
+              // 주소 정제 후 JSON에 반영
               if (jsonContent.analysis?.working_conditions) {
                 jsonContent.analysis.working_conditions.location = cleanLocation;
               }
+              if (jsonContent.positions?.[0]?.working_conditions) {
+                jsonContent.positions[0].working_conditions.location = cleanLocation;
+              }
+              
               const parsedJob = await parseJsonToJob(jsonContent);
-              // DB의 최신 정보(ID, Status, 회사명 등)로 덮어쓰기
+              
               return {
                 ...parsedJob,
                 id: dbJob.id, 
@@ -77,7 +84,6 @@ export function Dashboard() {
                 location: cleanLocation || "위치 정보 없음",
                 detail: {
                     ...parsedJob.detail,
-                    // 모달에서 쓸 스크린샷 데이터 저장 (없으면 빈 문자열)
                     screenshot: dbJob.screenshot || "" 
                 }
               };
@@ -88,7 +94,6 @@ export function Dashboard() {
           })
         );
 
-        // null 값(실패한 건) 제외하고 상태 업데이트
         setJobs(convertedJobs.filter((j): j is Job => j !== null));
 
       } catch (error) {
@@ -101,7 +106,6 @@ export function Dashboard() {
     fetchJobs();
   }, []);
 
-  // 집 위치가 설정되면 모든 공고의 대중교통 경로 계산
   useEffect(() => {
     if (homeLocation) {
       jobs.forEach(job => {
@@ -112,7 +116,6 @@ export function Dashboard() {
     }
   }, [homeLocation, jobs]);
 
-  // 대중교통 경로 검색
   const fetchTransitRoute = async (job: Job) => {
     if (!homeLocation) return;
 
@@ -127,11 +130,9 @@ export function Dashboard() {
       );
 
       if (routes && routes.length > 0) {
-        // 가장 빠른 경로 선택
         const fastestRoute = routes[0];
         setTransitRoutes(prev => new Map(prev).set(job.id, fastestRoute));
 
-        // Job의 commuteTime 업데이트
         setJobs(prevJobs => 
           prevJobs.map(j => 
             j.id === job.id 
@@ -142,7 +143,6 @@ export function Dashboard() {
       }
     } catch (error) {
       console.error(`경로 검색 실패 (${job.company}):`, error);
-      // 오류 시 기본 텍스트로 표시
       setJobs(prevJobs => 
         prevJobs.map(j => 
           j.id === job.id 
@@ -172,7 +172,6 @@ export function Dashboard() {
         setJobs(prev => [newJob, ...prev]);
         setSelectedJobId(newJob.id);
         
-        // 집 위치가 설정되어 있으면 경로 계산
         if (homeLocation) {
           fetchTransitRoute(newJob);
         }
@@ -189,12 +188,10 @@ export function Dashboard() {
 
   const handleSaveHomeLocation = (location: HomeLocation) => {
     setHomeLocation(location);
-    // 모든 공고의 경로 재계산
     setTransitRoutes(new Map());
   };
 
   const handleDelete = async (id: number, e?: React.MouseEvent) => {
-    // 리스트에서 클릭 시, 카드 선택 이벤트가 같이 터지는 것 방지
     e?.stopPropagation(); 
 
     if (!window.confirm("정말 이 공고를 삭제하시겠습니까?")) return;
@@ -205,10 +202,8 @@ export function Dashboard() {
       });
 
       if (response.ok) {
-        // UI에서 즉시 제거 (새로고침 없이)
         setJobs(prev => prev.filter(job => job.id !== id));
         
-        // 만약 보고 있던 공고를 삭제했다면 상세창 닫기
         if (selectedJobId === id) {
           setSelectedJobId(null);
         }
@@ -231,7 +226,6 @@ export function Dashboard() {
         </h2>
         
         <div className="flex gap-3">
-          {/* 집 위치 설정 버튼 */}
           <button
             onClick={() => setShowHomeSettings(true)}
             className={`px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95 ${
@@ -244,7 +238,6 @@ export function Dashboard() {
             {homeLocation ? '집 위치 변경' : '집 위치 설정'}
           </button>
 
-          {/* 공고 추가 버튼 */}
           <input 
             type="file" 
             ref={fileInputRef}
@@ -295,7 +288,6 @@ export function Dashboard() {
                   selectedJobId === job.id ? 'bg-white border-teal-500 ring-2 ring-teal-50 shadow-md' : 'bg-white border-slate-200 hover:border-teal-300'
                 }`}
               >
-                {/* ✅ [추가] 우측 상단 삭제 버튼 (마우스 올렸을 때만 표시: opacity-0 group-hover:opacity-100) */}
                 <button
                   onClick={(e) => handleDelete(job.id, e)}
                   className="absolute top-4 right-4 p-1.5 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100 z-10"
@@ -345,9 +337,9 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* 중간 상세 패널 */}
+        {/* 중간 상세 패널 - DynamicJobDetail 적용 */}
         {selectedJob && (
-          <div className="w-[450px] h-full bg-white shadow-lg z-10 overflow-y-auto border-l border-r border-slate-200 shrink-0">
+          <div className="w-[500px] h-full bg-white shadow-lg z-10 overflow-y-auto border-l border-r border-slate-200 shrink-0">
             <div className="min-h-full pb-10">
               <div className="h-32 bg-gradient-to-r from-teal-500 to-emerald-600 relative p-6 flex justify-end items-start">
                 <button 
@@ -386,58 +378,15 @@ export function Dashboard() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 mb-8">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <div className="text-xs text-slate-400 font-bold mb-1">연봉</div>
-                    <div className="text-sm font-bold text-slate-700">{selectedJob.detail?.salary || "면접 후 협의"}</div>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <div className="text-xs text-slate-400 font-bold mb-1">근무 시간</div>
-                    <div className="text-sm font-bold text-slate-700">{selectedJob.detail?.workHours || "09:00 - 18:00"}</div>
-                  </div>
-                </div>
+                {/* 동적 공고 상세 표시 */}
+                {selectedJob.rawJson && (
+                  <DynamicJobDetail 
+                    rawJson={selectedJob.rawJson} 
+                    companyName={selectedJob.company}
+                  />
+                )}
 
-                <div className="mb-8">
-                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-3">
-                    <Briefcase size={16} className="text-teal-500"/> 주요 업무
-                  </h3>
-                  <div className="bg-white p-1">
-                    {selectedJob.detail?.responsibilities ? (
-                      <ul className="space-y-2">
-                        {selectedJob.detail.responsibilities.map((item, idx) => (
-                          <li key={idx} className="flex gap-3 text-slate-600 text-xs leading-relaxed">
-                            <span className="text-teal-400 mt-1.5">•</span>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : <p className="text-slate-400 text-sm">상세 정보가 없습니다.</p>}
-                  </div>
-                </div>
-
-                <div className="mb-8">
-                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-3">
-                    <Code2 size={16} className="text-indigo-500"/> 필요 기술
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedJob.detail?.techStack ? (
-                      selectedJob.detail.techStack.map((tech, idx) => (
-                        <span key={idx} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg border border-indigo-100">
-                          {tech}
-                        </span>
-                      ))
-                    ) : (
-                      selectedJob.tags?.map((tag, idx) => (
-                        <span key={idx} className="px-3 py-1.5 bg-slate-100 text-slate-500 text-xs font-bold rounded-lg">
-                          {tag}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2">
-                   {/* 기존 원문 보기 버튼 (너비 조정: w-full -> flex-1) */}
+                <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2 mt-8">
                    <button 
                      onClick={() => setIsScreenshotOpen(true)}
                      className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
@@ -445,7 +394,6 @@ export function Dashboard() {
                      <Maximize2 size={16} /> 원문 보기
                    </button>
 
-                   {/* ✅ [추가] 삭제 버튼 */}
                    <button 
                      onClick={() => handleDelete(selectedJob.id)}
                      className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors active:scale-95 border border-red-100"
@@ -472,17 +420,16 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* 스크린샷 모달 */}
       {isScreenshotOpen && selectedJob && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-10 animate-fade-in cursor-pointer"
-          onClick={() => setIsScreenshotOpen(false)} // 1. 배경 누르면 닫기
+          onClick={() => setIsScreenshotOpen(false)}
         >
           <div 
             className="bg-white w-[800px] h-[90%] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-slide-up cursor-default"
-            onClick={(e) => e.stopPropagation()} // 2. 내용 누르면 닫기 방지 (이벤트 전파 중단)
+            onClick={(e) => e.stopPropagation()}
           >
-            
-            {/* 모달 헤더 */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white z-10 shrink-0">
               <div className="flex flex-col">
                 <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
@@ -498,7 +445,6 @@ export function Dashboard() {
                 </a>
               </div>
               
-              {/* 3. 닫기 버튼 (명시적) */}
               <button 
                 onClick={() => setIsScreenshotOpen(false)}
                 className="p-2 hover:bg-slate-100 rounded-full transition-colors group"
@@ -508,7 +454,6 @@ export function Dashboard() {
               </button>
             </div>
 
-            {/* 모달 바디 */}
             <div className="flex-1 overflow-y-auto bg-slate-100 p-4">
               {/* @ts-ignore */}
               {selectedJob.detail?.screenshot ? (
