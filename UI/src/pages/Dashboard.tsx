@@ -82,6 +82,7 @@ export function Dashboard() {
                 role: dbJob.roleName,
                 status: dbJob.status as JobStatus,
                 location: cleanLocation || "위치 정보 없음",
+                rawJson: jsonContent, // ⭐ 원본 JSON을 명시적으로 추가
                 detail: {
                     ...parsedJob.detail,
                     screenshot: dbJob.screenshot || "" 
