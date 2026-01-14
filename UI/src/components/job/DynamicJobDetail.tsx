@@ -1,4 +1,4 @@
-import { JobJsonV2 } from '../../types';
+import type { JobJsonV2 } from '../../types/index';
 import { Briefcase, Code2, Award, DollarSign, Clock, Building2, Users, Calendar, MapPin, TrendingUp } from 'lucide-react';
 
 interface DynamicJobDetailProps {
