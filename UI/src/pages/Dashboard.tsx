@@ -3,6 +3,7 @@ import type { Job, JobStatus, BackendJob } from '../types/index';
 import { KakaoMapContainer } from '../components/map/KakaoMapContainer';
 import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Building2, Home as HomeIcon, Maximize2, Trash2, Briefcase} from 'lucide-react';
 import { parseJsonToJob } from '../utils/jobParser';
+import { normalizeJobJson } from '../utils/jsonNormalizer';
 import { HomeLocationSettings } from '../components/settings/HomeLocationSettings';
 import { searchTransitRoute, formatRouteInfo } from '../utils/odsayApi';
 import type { TransitRoute } from '../utils/odsayApi';
@@ -45,44 +46,19 @@ export function Dashboard() {
             try {
               const jsonContent = JSON.parse(dbJob.jobDetailJson);
               
-              // 주소 정제 로직
-              let rawLocation = "";
-              if (jsonContent.analysis?.working_conditions?.location) {
-                rawLocation = jsonContent.analysis.working_conditions.location;
-              } else if (jsonContent.positions?.[0]?.working_conditions?.location) {
-                rawLocation = jsonContent.positions[0].working_conditions.location;
-              }
+              // ✅ jsonNormalizer를 사용해서 JSON 정규화 (주소 정제 포함)
+              const { normalized, companyName, positionTitle } = normalizeJobJson(jsonContent);
               
-              let cleanLocation = rawLocation
-                .replace(/^(근무지|주소|위치|근무장소)[:\s]*/g, '')
-                .replace(/\(.*?\)/g, '')
-                .replace(/\[.*?\]/g, '')
-                .trim();
-              
-              const addressMatch = cleanLocation.match(/([가-힣A-Za-z0-9\s\-\.]+(?:로|길|동|가|읍|면|리)\s*\d+(?:-\d+)?)/);
-              
-              if (addressMatch) {
-                cleanLocation = addressMatch[0].trim();
-              }
-              
-              // 주소 정제 후 JSON에 반영
-              if (jsonContent.analysis?.working_conditions) {
-                jsonContent.analysis.working_conditions.location = cleanLocation;
-              }
-              if (jsonContent.positions?.[0]?.working_conditions) {
-                jsonContent.positions[0].working_conditions.location = cleanLocation;
-              }
-              
+              // ✅ parseJsonToJob는 이미 정규화된 JSON을 받음
               const parsedJob = await parseJsonToJob(jsonContent);
               
               return {
                 ...parsedJob,
                 id: dbJob.id, 
-                company: dbJob.companyName,
-                role: dbJob.roleName,
+                company: dbJob.companyName || companyName, // DB값 우선, 없으면 추출값
+                role: dbJob.roleName || positionTitle,
                 status: dbJob.status as JobStatus,
-                location: cleanLocation || "위치 정보 없음",
-                rawJson: jsonContent, // ⭐ 원본 JSON을 명시적으로 추가
+                rawJson: normalized, // ⭐ 정규화된 JSON 저장
                 detail: {
                     ...parsedJob.detail,
                     screenshot: dbJob.screenshot || "" 
@@ -338,7 +314,7 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* 중간 상세 패널 - DynamicJobDetail 적용 */}
+        {/* 중간 상세 패널 */}
         {selectedJob && (
           <div className="w-[500px] h-full bg-white shadow-lg z-10 overflow-y-auto border-l border-r border-slate-200 shrink-0">
             <div className="min-h-full pb-10">
@@ -379,7 +355,7 @@ export function Dashboard() {
                   </div>
                 )}
 
-                {/* 동적 공고 상세 표시 - rawJson이 있을 때만 렌더링 */}
+                {/* 동적 공고 상세 표시 */}
                 {selectedJob.rawJson ? (
                   <DynamicJobDetail 
                     rawJson={selectedJob.rawJson} 
