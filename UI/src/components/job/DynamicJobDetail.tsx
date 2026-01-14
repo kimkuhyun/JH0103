@@ -50,14 +50,12 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               {companyInfo.business_type && (
                 <p className="text-xs text-slate-500 mb-2">{companyInfo.business_type}</p>
               )}
-              {/* ✅ line-clamp-3 제거 - 회사 소개 전체 표시 */}
               <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
                 {companyInfo.description}
               </p>
             </div>
           </div>
           
-          {/* 회사 메타 정보 */}
           {(companyInfo.employee_count || companyInfo.established || companyInfo.location) && (
             <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-slate-200">
               {companyInfo.employee_count && (
@@ -271,7 +269,8 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
                 <span key={idx} className="px-3 py-1.5 bg-white text-violet-700 text-xs font-bold rounded-lg border border-violet-200">
                   #{keyword}
                 </span>
-              ))}\n            </div>
+              ))}
+            </div>
           )}
           {culture.description && (
             <p className="text-sm text-slate-600 leading-relaxed mt-2">
