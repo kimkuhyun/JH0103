@@ -15,6 +15,54 @@ interface HomeLocation {
   lng: number;
 }
 
+/**
+ * 주소를 간결하게 표시 (시/구 레벨만)
+ */
+function getShortLocation(fullAddress: string): string {
+  if (!fullAddress || fullAddress === '위치 정보 없음' || fullAddress === '알 수 없음') {
+    return '위치 미상';
+  }
+  
+  // "서울 강남구 논현로149길 5" → "서울 강남구"
+  // "경기도 성남시 분당구 판교역로 ..." → "경기도 성남시"
+  const parts = fullAddress.split(' ');
+  
+  if (parts.length >= 2) {
+    return `${parts[0]} ${parts[1]}`;
+  }
+  
+  return parts[0] || '위치 미상';
+}
+
+/**
+ * Job의 role을 안전하게 추출 (fallback 포함)
+ */
+function getJobRole(job: Job): string {
+  // 1순위: job.role이 유효한 값
+  if (job.role && job.role !== '알 수 없는 직무' && job.role !== 'Untitled Role') {
+    return job.role;
+  }
+  
+  // 2순위: rawJson의 positions[0].title
+  if (job.rawJson && job.rawJson.positions && job.rawJson.positions.length > 0) {
+    const title = job.rawJson.positions[0].title;
+    if (title) {
+      if (job.rawJson.positions.length > 1) {
+        return `${title} 외 ${job.rawJson.positions.length - 1}건`;
+      }
+      return title;
+    }
+  }
+  
+  // 3순위: rawJson의 job_summary.title (구버전)
+  if (job.rawJson && (job.rawJson as any).job_summary?.title) {
+    return (job.rawJson as any).job_summary.title;
+  }
+  
+  // 최종 fallback
+  return '포지션 정보 없음';
+}
+
 export function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
@@ -286,7 +334,7 @@ export function Dashboard() {
                   </div>
                   
                   <div className="text-sm text-slate-600 mb-3 font-medium line-clamp-2 leading-relaxed">
-                    {job.role}
+                    {getJobRole(job)}
                   </div>
 
                   {job.tags && job.tags.length > 0 && (
@@ -315,148 +363,4 @@ export function Dashboard() {
         </div>
 
         {/* 중간 상세 패널 */}
-        {selectedJob && (
-          <div className="w-[500px] h-full bg-white shadow-lg z-10 overflow-y-auto border-l border-r border-slate-200 shrink-0">
-            <div className="min-h-full pb-10">
-              <div className="h-32 bg-gradient-to-r from-teal-500 to-emerald-600 relative p-6 flex justify-end items-start">
-                <button 
-                  onClick={() => setSelectedJobId(null)} 
-                  className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-full transition-all"
-                >
-                  <X size={20} />
-                </button>
-                <div className="absolute -bottom-8 left-8 bg-white p-3 rounded-2xl shadow-lg border border-slate-100">
-                  <Building2 className="w-8 h-8 text-teal-600" />
-                </div>
-              </div>
-
-              <div className="px-8 pt-12">
-                <h1 className="text-xl font-bold text-slate-900 leading-tight mb-2">
-                  {selectedJob.role}
-                </h1>
-                <div className="flex items-center gap-2 text-sm text-slate-500 font-medium mb-6">
-                  <span>{selectedJob.company}</span>
-                  <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <MapPin size={14} /> {selectedJob.location}
-                  </span>
-                </div>
-
-                {/* 출퇴근 정보 */}
-                {homeLocation && transitRoutes.has(selectedJob.id) && (
-                  <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 mb-6">
-                    <div className="flex items-center gap-2 text-sm font-bold text-teal-700 mb-2">
-                      <HomeIcon size={16} />
-                      집에서 출근 시
-                    </div>
-                    <div className="text-xs text-slate-600">
-                      {formatRouteInfo(transitRoutes.get(selectedJob.id)!)}
-                    </div>
-                  </div>
-                )}
-
-                {/* 동적 공고 상세 표시 */}
-                {selectedJob.rawJson ? (
-                  <DynamicJobDetail 
-                    rawJson={selectedJob.rawJson} 
-                    companyName={selectedJob.company}
-                  />
-                ) : (
-                  <div className="text-center py-10 text-slate-400">
-                    상세 정보를 불러올 수 없습니다.
-                  </div>
-                )}
-
-                <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2 mt-8">
-                   <button 
-                     onClick={() => setIsScreenshotOpen(true)}
-                     className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
-                   >
-                     <Maximize2 size={16} /> 원문 보기
-                   </button>
-
-                   <button 
-                     onClick={() => handleDelete(selectedJob.id)}
-                     className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors active:scale-95 border border-red-100"
-                     title="공고 삭제"
-                   >
-                     <Trash2 size={20} />
-                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 오른쪽 지도 */}
-        <div className="flex-1 relative bg-slate-100 overflow-hidden">
-          <KakaoMapContainer 
-            jobs={jobs} 
-            selectedJobId={selectedJobId} 
-            onSelectJob={setSelectedJobId}
-            homeLocation={homeLocation}
-            transitRoutes={transitRoutes}
-            fullScreen={true} 
-          />
-        </div>
-      </div>
-
-      {/* 스크린샷 모달 */}
-      {isScreenshotOpen && selectedJob && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-10 animate-fade-in cursor-pointer"
-          onClick={() => setIsScreenshotOpen(false)}
-        >
-          <div 
-            className="bg-white w-[800px] h-[90%] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-slide-up cursor-default"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white z-10 shrink-0">
-              <div className="flex flex-col">
-                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                  {selectedJob.company} <span className="text-slate-300">|</span> {selectedJob.role}
-                </h3>
-                <a 
-                  href={selectedJob.detail?.originalUrl} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 mt-1 hover:underline"
-                >
-                  {selectedJob.detail?.originalUrl} <ExternalLink size={10} />
-                </a>
-              </div>
-              
-              <button 
-                onClick={() => setIsScreenshotOpen(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors group"
-                title="닫기 (Esc)"
-              >
-                <X size={28} className="text-slate-400 group-hover:text-slate-700" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto bg-slate-100 p-4">
-              {/* @ts-ignore */}
-              {selectedJob.detail?.screenshot ? (
-                // @ts-ignore
-                <img src={`data:image/jpeg;base64,${selectedJob.detail.screenshot}`} alt="Original Capture" className="w-full h-auto rounded shadow-sm" />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2">
-                  <p>저장된 스크린샷이 없습니다.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 집 위치 설정 모달 */}
-      {showHomeSettings && (
-        <HomeLocationSettings
-          onClose={() => setShowHomeSettings(false)}
-          onSave={handleSaveHomeLocation}
-        />
-      )}
-    </div>
-  );
-}
+        {selectedJob && (\n          <div className=\"w-[500px] h-full bg-white shadow-lg z-10 overflow-y-auto border-l border-r border-slate-200 shrink-0\">\n            <div className=\"min-h-full pb-10\">\n              <div className=\"h-32 bg-gradient-to-r from-teal-500 to-emerald-600 relative p-6 flex justify-end items-start\">\n                <button \n                  onClick={() => setSelectedJobId(null)} \n                  className=\"text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-full transition-all\"\n                >\n                  <X size={20} />\n                </button>\n                <div className=\"absolute -bottom-8 left-8 bg-white p-3 rounded-2xl shadow-lg border border-slate-100\">\n                  <Building2 className=\"w-8 h-8 text-teal-600\" />\n                </div>\n              </div>\n\n              <div className=\"px-8 pt-12\">\n                {/* ✅ 개선: role을 안전하게 추출 */}\n                <h1 className=\"text-xl font-bold text-slate-900 leading-tight mb-2\">\n                  {getJobRole(selectedJob)}\n                </h1>\n                {/* ✅ 개선: 주소를 간결하게 표시 */}\n                <div className=\"flex items-center gap-2 text-sm text-slate-500 font-medium mb-6\">\n                  <span>{selectedJob.company}</span>\n                  <span className=\"w-1 h-1 bg-slate-300 rounded-full\"></span>\n                  <span className=\"flex items-center gap-1 text-slate-400\">\n                    <MapPin size={14} /> {getShortLocation(selectedJob.location)}\n                  </span>\n                </div>\n\n                {/* 출퇴근 정보 */}\n                {homeLocation && transitRoutes.has(selectedJob.id) && (\n                  <div className=\"bg-teal-50 border border-teal-200 rounded-2xl p-4 mb-6\">\n                    <div className=\"flex items-center gap-2 text-sm font-bold text-teal-700 mb-2\">\n                      <HomeIcon size={16} />\n                      집에서 출근 시\n                    </div>\n                    <div className=\"text-xs text-slate-600\">\n                      {formatRouteInfo(transitRoutes.get(selectedJob.id)!)}\n                    </div>\n                  </div>\n                )}\n\n                {/* 동적 공고 상세 표시 */}\n                {selectedJob.rawJson ? (\n                  <DynamicJobDetail \n                    rawJson={selectedJob.rawJson} \n                    companyName={selectedJob.company}\n                  />\n                ) : (\n                  <div className=\"text-center py-10 text-slate-400\">\n                    상세 정보를 불러올 수 없습니다.\n                  </div>\n                )}\n\n                <div className=\"sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2 mt-8\">\n                   <button \n                     onClick={() => setIsScreenshotOpen(true)}\n                     className=\"flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95\"\n                   >\n                     <Maximize2 size={16} /> 원문 보기\n                   </button>\n\n                   <button \n                     onClick={() => handleDelete(selectedJob.id)}\n                     className=\"px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors active:scale-95 border border-red-100\"\n                     title=\"공고 삭제\"\n                   >\n                     <Trash2 size={20} />\n                   </button>\n                </div>\n              </div>\n            </div>\n          </div>\n        )}\n\n        {/* 오른쪽 지도 */}\n        <div className=\"flex-1 relative bg-slate-100 overflow-hidden\">\n          <KakaoMapContainer \n            jobs={jobs} \n            selectedJobId={selectedJobId} \n            onSelectJob={setSelectedJobId}\n            homeLocation={homeLocation}\n            transitRoutes={transitRoutes}\n            fullScreen={true} \n          />\n        </div>\n      </div>\n\n      {/* 스크린샷 모달 */}\n      {isScreenshotOpen && selectedJob && (\n        <div \n          className=\"fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-10 animate-fade-in cursor-pointer\"\n          onClick={() => setIsScreenshotOpen(false)}\n        >\n          <div \n            className=\"bg-white w-[800px] h-[90%] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-slide-up cursor-default\"\n            onClick={(e) => e.stopPropagation()}\n          >\n            <div className=\"flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white z-10 shrink-0\">\n              <div className=\"flex flex-col\">\n                <h3 className=\"font-bold text-lg text-slate-800 flex items-center gap-2\">\n                  {selectedJob.company} <span className=\"text-slate-300\">|</span> {getJobRole(selectedJob)}\n                </h3>\n                <a \n                  href={selectedJob.detail?.originalUrl} \n                  target=\"_blank\" \n                  rel=\"noreferrer\"\n                  className=\"text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 mt-1 hover:underline\"\n                >\n                  {selectedJob.detail?.originalUrl} <ExternalLink size={10} />\n                </a>\n              </div>\n              \n              <button \n                onClick={() => setIsScreenshotOpen(false)}\n                className=\"p-2 hover:bg-slate-100 rounded-full transition-colors group\"\n                title=\"닫기 (Esc)\"\n              >\n                <X size={28} className=\"text-slate-400 group-hover:text-slate-700\" />\n              </button>\n            </div>\n\n            <div className=\"flex-1 overflow-y-auto bg-slate-100 p-4\">\n              {/* @ts-ignore */}\n              {selectedJob.detail?.screenshot ? (\n                // @ts-ignore\n                <img src={`data:image/jpeg;base64,${selectedJob.detail.screenshot}`} alt=\"Original Capture\" className=\"w-full h-auto rounded shadow-sm\" />\n              ) : (\n                <div className=\"flex flex-col items-center justify-center h-full text-slate-400 gap-2\">\n                  <p>저장된 스크린샷이 없습니다.</p>\n                </div>\n              )}\n            </div>\n          </div>\n        </div>\n      )}\n\n      {/* 집 위치 설정 모달 */}\n      {showHomeSettings && (\n        <HomeLocationSettings\n          onClose={() => setShowHomeSettings(false)}\n          onSave={handleSaveHomeLocation}\n        />\n      )}\n    </div>\n  );\n}\n
