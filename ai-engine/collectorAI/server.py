@@ -8,7 +8,6 @@ import threading
 import queue
 import uuid
 import time
-import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -36,74 +35,19 @@ job_queue = queue.Queue()
 job_results = {}
 job_lock = threading.Lock()
 
-def sanitize_filename(title, max_length=100):
-    """파일명으로 사용할 수 있도록 문자열 정제"""
-    # 특수문자 제거 (영문, 한글, 숫자, 공백, 하이픈, 언더스코어만 허용)
-    safe_title = re.sub(r'[^\w\s-]', '', title, flags=re.UNICODE)
-    # 연속된 공백을 하나로
-    safe_title = re.sub(r'\s+', ' ', safe_title)
-    # 앞뒤 공백 제거 및 길이 제한
-    safe_title = safe_title.strip()[:max_length]
-    return safe_title if safe_title else 'unknown_job'
-
-def extract_company_name(result_json, metadata):
-    """회사명 추출 (우선순위: AI 분석 > 메타데이터)"""
-    # 1순위: AI 분석 결과의 company_info.name
-    company = result_json.get('company_info', {}).get('name', '').strip()
-    
-    # 2순위: 메타데이터의 company
-    if not company and metadata:
-        company = metadata.get('company', '').strip()
-    
-    # 3순위: positions 배열에서 추출 (혹시 position별로 회사명이 있을 경우)
-    if not company:
-        positions = result_json.get('positions', [])
-        if positions and isinstance(positions, list) and len(positions) > 0:
-            # 첫 번째 포지션에서 회사명이 있는지 확인 (일반적이지 않지만 대비)
-            company = positions[0].get('company', '').strip()
-    
-    return company if company else "UnknownCompany"
-
-def generate_filename(result_json, metadata, job_id):
-    """파일명 생성 (회사명 기반)"""
-    # 회사명 추출
-    company = extract_company_name(result_json, metadata)
-    
-    # 포지션명들 추출 (여러 포지션이 있을 수 있음)
-    positions = result_json.get('positions', [])
-    
-    if positions and isinstance(positions, list) and len(positions) > 0:
-        # 포지션이 여러 개인 경우 첫 번째 포지션명만 사용하거나 "다수포지션" 표시
-        if len(positions) == 1:
-            job_title = positions[0].get('title', '').strip()
-        else:
-            # 여러 포지션인 경우: 첫 번째 포지션명_외N건
-            first_title = positions[0].get('title', '포지션').strip()
-            job_title = f"{first_title}_외{len(positions)-1}건"
-    else:
-        # 구버전 호환성: job_summary.title에서 추출
-        job_title = result_json.get('job_summary', {}).get('title', '').strip()
-        if not job_title and metadata:
-            job_title = metadata.get('title', '').strip()
-    
-    # 파일명 조합
-    if company and job_title:
-        raw_name = f"{company}_{job_title}"
-    elif job_title:
-        raw_name = f"{company}_{job_title}"
-    elif company:
-        raw_name = f"{company}_Untitled"
-    else:
-        raw_name = f"result_{job_id}"
-    
-    safe_title = sanitize_filename(raw_name)
-    filename = f"{safe_title}.json"
-    
-    # 파일명 중복 방지
+def generate_simple_filename(job_id):
+    """
+    간소화된 파일명 생성 (JSON 파싱 없음)
+    파일명 형식: {timestamp}_{job_id}.json
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{timestamp}_{job_id}.json"
     filepath = os.path.join(JSON_DIR, filename)
+    
+    # 중복 방지
     counter = 1
     while os.path.exists(filepath):
-        filename = f"{safe_title}_{counter}.json"
+        filename = f"{timestamp}_{job_id}_{counter}.json"
         filepath = os.path.join(JSON_DIR, filename)
         counter += 1
     
@@ -159,8 +103,12 @@ def analyze_with_ollama(image_b64, prompt):
         # JSON 문자열 파싱
         return json.loads(result['response'])
         
+    except json.JSONDecodeError as e:
+        print(f"[Ollama] JSON 파싱 오류: {e}")
+        print(f"[Ollama] 원본 응답: {result.get('response', '')[:500]}")
+        return None
     except Exception as e:
-        print(f"[Ollama Error] {e}")
+        print(f"[Ollama] API 오류: {e}")
         return None
 
 def worker():
@@ -186,34 +134,39 @@ def worker():
             # 4. 결과 저장 및 상태 업데이트
             if result_json:
                 try:
+                    # ✅ Backend로 RAW JSON 전송 (파싱 없음)
                     payload = {
                         "job_summary": result_json,
                         "url": url,
                         "image_base64": image_data,
                         "user_email": user_email
                     }
-                    requests.post(BACKEND_API_URL, json=payload)
+                    requests.post(BACKEND_API_URL, json=payload, timeout=30)
                     print(f"[워커] 자바 서버 전송 완료")
                 except Exception as e:
                     print(f"[워커] 자바 서버 전송 실패: {e}")
 
-                # 개선된 파일명 생성 로직
-                filename, filepath = generate_filename(result_json, metadata, job_id)
+                # ✅ 간소화된 파일명 생성 (JSON 파싱 없음)
+                filename, filepath = generate_simple_filename(job_id)
                 
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    json.dump(result_json, f, ensure_ascii=False, indent=2)
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(result_json, f, ensure_ascii=False, indent=2)
+                    print(f"[워커] 파일 저장 완료: {filename}")
+                except Exception as e:
+                    print(f"[워커] 파일 저장 실패: {e}")
                     
                 with job_lock:
                     job_results[job_id] = {
                         "status": "success",
                         "data": result_json
                     }
-                print(f"[워커] 작업 성공: {job_id} -> {filename}")
+                print(f"[워커] 작업 성공: {job_id}")
             else:
                 with job_lock:
                     job_results[job_id] = {
                         "status": "error",
-                        "message": "AI 분석 실패 (응답 없음)"
+                        "message": "AI 분석 실패 (응답 없음 또는 JSON 파싱 오류)"
                     }
                 print(f"[워커] 작업 실패: {job_id}")
 
@@ -221,6 +174,8 @@ def worker():
             
         except Exception as e:
             print(f"[워커] 예외 발생: {e}")
+            import traceback
+            traceback.print_exc()
             with job_lock:
                 job_results[job_id] = {"status": "error", "message": str(e)}
 
