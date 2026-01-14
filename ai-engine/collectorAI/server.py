@@ -46,6 +46,69 @@ def sanitize_filename(title, max_length=100):
     safe_title = safe_title.strip()[:max_length]
     return safe_title if safe_title else 'unknown_job'
 
+def extract_company_name(result_json, metadata):
+    """회사명 추출 (우선순위: AI 분석 > 메타데이터)"""
+    # 1순위: AI 분석 결과의 company_info.name
+    company = result_json.get('company_info', {}).get('name', '').strip()
+    
+    # 2순위: 메타데이터의 company
+    if not company and metadata:
+        company = metadata.get('company', '').strip()
+    
+    # 3순위: positions 배열에서 추출 (혹시 position별로 회사명이 있을 경우)
+    if not company:
+        positions = result_json.get('positions', [])
+        if positions and isinstance(positions, list) and len(positions) > 0:
+            # 첫 번째 포지션에서 회사명이 있는지 확인 (일반적이지 않지만 대비)
+            company = positions[0].get('company', '').strip()
+    
+    return company if company else "UnknownCompany"
+
+def generate_filename(result_json, metadata, job_id):
+    """파일명 생성 (회사명 기반)"""
+    # 회사명 추출
+    company = extract_company_name(result_json, metadata)
+    
+    # 포지션명들 추출 (여러 포지션이 있을 수 있음)
+    positions = result_json.get('positions', [])
+    
+    if positions and isinstance(positions, list) and len(positions) > 0:
+        # 포지션이 여러 개인 경우 첫 번째 포지션명만 사용하거나 "다수포지션" 표시
+        if len(positions) == 1:
+            job_title = positions[0].get('title', '').strip()
+        else:
+            # 여러 포지션인 경우: 첫 번째 포지션명_외N건
+            first_title = positions[0].get('title', '포지션').strip()
+            job_title = f"{first_title}_외{len(positions)-1}건"
+    else:
+        # 구버전 호환성: job_summary.title에서 추출
+        job_title = result_json.get('job_summary', {}).get('title', '').strip()
+        if not job_title and metadata:
+            job_title = metadata.get('title', '').strip()
+    
+    # 파일명 조합
+    if company and job_title:
+        raw_name = f"{company}_{job_title}"
+    elif job_title:
+        raw_name = f"{company}_{job_title}"
+    elif company:
+        raw_name = f"{company}_Untitled"
+    else:
+        raw_name = f"result_{job_id}"
+    
+    safe_title = sanitize_filename(raw_name)
+    filename = f"{safe_title}.json"
+    
+    # 파일명 중복 방지
+    filepath = os.path.join(JSON_DIR, filename)
+    counter = 1
+    while os.path.exists(filepath):
+        filename = f"{safe_title}_{counter}.json"
+        filepath = os.path.join(JSON_DIR, filename)
+        counter += 1
+    
+    return filename, filepath
+
 def optimize_image(base64_str):
     """이미지 리사이징 및 최적화 (AI 메모리 폭발 방지)"""
     try:
@@ -62,8 +125,6 @@ def optimize_image(base64_str):
         if img.width > max_w:
             ratio = max_w / img.width
             new_h = int(img.height * ratio)
-            # 세로 길이가 너무 길면(예: 8000px 이상) 잘라낼 수도 있지만, 
-            # 현재는 전체 내용을 유지하기 위해 리사이즈만 수행
             img = img.resize((max_w, new_h), Image.Resampling.LANCZOS)
             
         # 다시 Base64로 변환
@@ -136,35 +197,8 @@ def worker():
                 except Exception as e:
                     print(f"[워커] 자바 서버 전송 실패: {e}")
 
-                # 공고 타이틀로 파일명 생성
-                summary = result_json.get('job_summary', {})
-                company = summary.get('company_name', '').strip()
-                if not company and metadata:  
-                    company = metadata.get('company', '').strip()
-
-                job_title = summary.get('title', '').strip()
-                if not job_title and metadata:
-                    job_title = metadata.get('title', '').strip()
-                
-                if company and job_title:
-                    raw_name = f"{company}_{job_title}"
-                elif job_title:
-                    raw_name = f"UnknownCompany_{job_title}"
-                elif company:
-                    raw_name = f"{company}_Untitled"
-                else:
-                    raw_name = f"result_{job_id}"
-                
-                safe_title = sanitize_filename(raw_name)
-                filename = f"{safe_title}.json"
-
-                # 파일명 중복 방지
-                filepath = os.path.join(JSON_DIR, filename)
-                counter = 1
-                while os.path.exists(filepath):
-                    filename = f"{safe_title}_{counter}.json"
-                    filepath = os.path.join(JSON_DIR, filename)
-                    counter += 1
+                # 개선된 파일명 생성 로직
+                filename, filepath = generate_filename(result_json, metadata, job_id)
                 
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(result_json, f, ensure_ascii=False, indent=2)
