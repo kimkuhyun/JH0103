@@ -1,9 +1,10 @@
 package com.jh0103.core.job.domain;
 
 public enum JobStatus {
-    INBOX("받은편지함"),
+    PENDING("대기중"),
+    DRAFT("작성중"),
     APPLIED("지원 완료"),
-    ARCHIVED("보관됨");
+    CLOSED("종료됨");
 
     private final String description;
 
