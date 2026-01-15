@@ -4,8 +4,8 @@
 
 ## 프로젝트 개요
 
-CareerOS Collector는 AI가 취업 준비를 도와주는 개인용 시스템입니다.
-공고 수집, 회사 분석, 이력서 작성을 자동화하여 모든 데이터는 로컬에 안전하게 보관됩니다.
+CareerOS Collector는 로컬에서 작동하는 AI 취업준비 시스템입니다.
+원클릭 공고 수집, 자동 회사 분석, 맞춤형 이력서 생성으로 체계적인 취업 준비를 지원합니다.
 
 **주요 기능**
 - 원클릭 채용공고 자동 캡처 (Alt+Shift+S)
@@ -58,12 +58,15 @@ JH0103/
 │   ├── background.js         백그라운드 처리
 │   ├── content.js            페이지 스크립트
 │   └── popup.js              팝업 UI
-├── services/auth-service/     백엔드 API
-│   └── src/main/java/
-│       ├── entity/           데이터 모델
-│       ├── repository/       데이터 접근
-│       ├── service/          비즈니스 로직
-│       └── controller/       REST API
+├── src/                      백엔드 API
+│   └── main/java/com/jh0103/core/
+│       ├── config/          설정
+│       └── job/
+│           ├── domain/      도메인 모델
+│           ├── repository/  데이터 접근
+│           ├── service/     비즈니스 로직
+│           ├── controller/  REST API
+│           └── dto/         DTO
 ├── infra/db/init/             데이터베이스 초기화
 └── docker-compose.yml         컨테이너 설정
 ```
@@ -82,7 +85,6 @@ JH0103/
 **문서**
 - `README.md` - 코드 색인 (현재 파일)
 - `HISTORY.md` - 기능 개발 히스토리
-- `BACKEND_IMPLEMENTATION.md` - 백엔드 구현 가이드
 
 ---
 
@@ -162,28 +164,30 @@ JH0103/
 
 ---
 
-### 2.5 Services (백엔드)
+### 2.5 Backend (백엔드)
 
-**위치**: `services/auth-service/src/main/java/`
-
-#### 엔티티 (`entity/`)
-- `Job.java` - 공고 데이터 모델
-- `JobStatus.java` - 공고 상태 enum
-
-#### 데이터 접근 (`repository/`)
-- `JobRepository.java` - 데이터베이스 접근
-
-#### 비즈니스 로직 (`service/`)
-- `JobService.java` - 공고 관리 로직
-
-#### API (`controller/`)
-- `JobController.java` - REST 엔드포인트
-
-#### DTO (`dto/`)
-- `UpdateJobStatusRequest.java` - 상태 변경 요청
+**위치**: `src/main/java/com/jh0103/core/`
 
 #### 설정 (`config/`)
 - `SecurityConfig.java` - 보안 설정
+
+#### 공고 도메인 (`job/`)
+
+**도메인 모델** (`job/domain/`)
+- `Job.java` - 공고 데이터 모델
+- `JobStatus.java` - 공고 상태 enum
+
+**데이터 접근** (`job/repository/`)
+- `JobRepository.java` - 데이터베이스 접근
+
+**비즈니스 로직** (`job/service/`)
+- `JobService.java` - 공고 관리 로직
+
+**REST API** (`job/controller/`)
+- `JobController.java` - REST 엔드포인트
+
+**DTO** (`job/dto/`)
+- `UpdateJobStatusRequest.java` - 상태 변경 요청
 
 ---
 
@@ -318,7 +322,7 @@ detectSite()
 
 ### 3.8 백엔드 서비스 (JobService.java)
 
-**위치**: `services/auth-service/src/main/java/service/JobService.java`
+**위치**: `src/main/java/com/jh0103/core/job/service/JobService.java`
 
 ```java
 // 공고 생성
