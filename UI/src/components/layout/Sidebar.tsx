@@ -15,7 +15,7 @@ export function Sidebar({ activeMenu, onMenuClick, userName, onLogout }: Sidebar
   ];
 
   return (
-    <aside className="w-[260px] bg-white border-r border-slate-200 flex flex-col shrink-0 z-30 h-full">
+    <aside className="w-[200px] bg-white border-r border-slate-200 flex flex-col shrink-0 z-30 h-full">
       {/* 로고 영역 */}
       <div className="h-[72px] flex items-center px-6 border-b border-slate-100">
         <div className="w-8 h-8 bg-teal-700 rounded-lg flex items-center justify-center text-white font-bold mr-3">C</div>

@@ -301,7 +301,7 @@ export function Dashboard() {
       </header>
 
       <div className="flex-1 flex overflow-hidden relative">
-        <div className="w-[400px] flex flex-col border-r border-slate-200 bg-white z-10 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] shrink-0">
+        <div className="w-[330px] flex flex-col border-r border-slate-200 bg-white z-10 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] shrink-0">
           <div className="p-5 border-b border-slate-100 bg-white sticky top-0 z-10 space-y-3">
             <div className="flex justify-between items-center">
               <span className="font-bold text-slate-700">총 <span className="text-teal-600">{filteredJobs.length}</span>건</span>
