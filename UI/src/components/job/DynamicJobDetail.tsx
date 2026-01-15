@@ -9,6 +9,8 @@ interface DynamicJobDetailProps {
 /**
  * 동적으로 JSON 구조를 파싱하여 공고 상세 정보를 렌더링하는 컴포넌트
  * 다양한 JSON 구조를 지원 (포지션 여러 개, 복리후생, 전형절차 등)
+ * 
+ * 색상 팔레트: teal(메인), emerald(긍정), slate(중립), amber(중요)
  */
 export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps) {
   // 회사 정보 추출
@@ -93,17 +95,17 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {position.employment_type && (
-                    <span className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
+                    <span className="text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded-md border border-teal-100 font-medium">
                       {position.employment_type}
                     </span>
                   )}
                   {position.experience_required && (
-                    <span className="text-xs px-2 py-1 bg-purple-50 text-purple-600 rounded-md border border-purple-100">
+                    <span className="text-xs px-2 py-1 bg-slate-100 text-slate-700 rounded-md border border-slate-200 font-medium">
                       {position.experience_required}
                     </span>
                   )}
                   {position.headcount && (
-                    <span className="text-xs px-2 py-1 bg-amber-50 text-amber-600 rounded-md border border-amber-100">
+                    <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md border border-emerald-100 font-medium">
                       {position.headcount}
                     </span>
                   )}
@@ -113,11 +115,11 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               {/* 주요 업무 */}
               {position.responsibilities && position.responsibilities.length > 0 && renderSection(
                 "주요 업무",
-                <Briefcase size={16} className="text-teal-500" />,
+                <Briefcase size={16} className="text-teal-600" />,
                 <ul className="space-y-2">
                   {position.responsibilities.map((item, i) => (
                     <li key={i} className="flex gap-3 text-slate-600 text-sm leading-relaxed">
-                      <span className="text-teal-400 mt-1.5">•</span>
+                      <span className="text-teal-500 mt-1.5">•</span>
                       <span>{item}</span>
                     </li>
                   ))}
@@ -127,11 +129,11 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               {/* 필수 자격 */}
               {position.essential_qualifications && position.essential_qualifications.length > 0 && renderSection(
                 "필수 자격",
-                <Award size={16} className="text-red-500" />,
+                <Award size={16} className="text-amber-600" />,
                 <ul className="space-y-2">
                   {position.essential_qualifications.map((item, i) => (
                     <li key={i} className="flex gap-3 text-slate-600 text-sm leading-relaxed">
-                      <span className="text-red-400 mt-1.5">•</span>
+                      <span className="text-amber-500 mt-1.5">•</span>
                       <span>{item}</span>
                     </li>
                   ))}
@@ -141,11 +143,11 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               {/* 우대 사항 */}
               {position.preferred_qualifications && position.preferred_qualifications.length > 0 && renderSection(
                 "우대 사항",
-                <TrendingUp size={16} className="text-green-500" />,
+                <TrendingUp size={16} className="text-emerald-600" />,
                 <ul className="space-y-2">
                   {position.preferred_qualifications.map((item, i) => (
                     <li key={i} className="flex gap-3 text-slate-600 text-sm leading-relaxed">
-                      <span className="text-green-400 mt-1.5">•</span>
+                      <span className="text-emerald-500 mt-1.5">•</span>
                       <span>{item}</span>
                     </li>
                   ))}
@@ -155,10 +157,10 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               {/* 기술 스택 */}
               {position.tech_stack && position.tech_stack.length > 0 && renderSection(
                 "기술 스택",
-                <Code2 size={16} className="text-indigo-500" />,
+                <Code2 size={16} className="text-teal-600" />,
                 <div className="flex flex-wrap gap-2">
                   {position.tech_stack.map((tech, i) => (
-                    <span key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-lg border border-indigo-100">
+                    <span key={i} className="px-3 py-1.5 bg-teal-50 text-teal-700 text-xs font-medium rounded-lg border border-teal-100">
                       {tech}
                     </span>
                   ))}
@@ -168,10 +170,10 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               {/* 도구 */}
               {position.tools && position.tools.length > 0 && renderSection(
                 "사용 도구",
-                <Code2 size={16} className="text-purple-500" />,
+                <Code2 size={16} className="text-slate-600" />,
                 <div className="flex flex-wrap gap-2">
                   {position.tools.map((tool, i) => (
-                    <span key={i} className="px-3 py-1.5 bg-purple-50 text-purple-600 text-xs font-bold rounded-lg border border-purple-100">
+                    <span key={i} className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded-lg border border-slate-200">
                       {tool}
                     </span>
                   ))}
@@ -180,8 +182,8 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               
               {/* 급여 정보 */}
               {position.salary && position.salary.amount && (
-                <div className="bg-green-50 rounded-lg p-3 border border-green-100 mt-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-green-700 mb-1">
+                <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 mt-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-700 mb-1">
                     <DollarSign size={16} />
                     {position.salary.type || "급여"}
                   </div>
@@ -194,8 +196,8 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
               
               {/* 근무 조건 */}
               {position.working_conditions && (
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 mt-4">
-                  <div className="flex items-center gap-2 text-sm font-bold text-blue-700 mb-2">
+                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 mt-4">
+                  <div className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
                     <Clock size={16} />
                     근무 조건
                   </div>
@@ -219,19 +221,19 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
       
       {/* 전형 절차 */}
       {hiringProcess.length > 0 && (
-        <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-amber-800 mb-3">
+        <div className="bg-teal-50 rounded-xl p-4 border border-teal-100">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-teal-800 mb-3">
             <Calendar size={16} />
             전형 절차
           </h3>
           <div className="flex flex-wrap gap-2">
             {hiringProcess.map((step, idx) => (
               <div key={idx} className="flex items-center gap-2">
-                <span className="px-3 py-1.5 bg-white text-amber-700 text-xs font-bold rounded-lg border border-amber-200">
+                <span className="px-3 py-1.5 bg-white text-teal-700 text-xs font-medium rounded-lg border border-teal-200">
                   {idx + 1}. {step}
                 </span>
                 {idx < hiringProcess.length - 1 && (
-                  <span className="text-amber-300">→</span>
+                  <span className="text-teal-300">→</span>
                 )}
               </div>
             ))}
@@ -241,14 +243,14 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
       
       {/* 복리후생 */}
       {benefits.length > 0 && (
-        <div className="bg-pink-50 rounded-xl p-4 border border-pink-100">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-pink-800 mb-3">
+        <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-emerald-800 mb-3">
             <Award size={16} />
             복리후생
           </h3>
           <div className="flex flex-wrap gap-2">
             {benefits.map((benefit, idx) => (
-              <span key={idx} className="px-3 py-1.5 bg-white text-pink-700 text-xs font-medium rounded-lg border border-pink-200">
+              <span key={idx} className="px-3 py-1.5 bg-white text-emerald-700 text-xs font-medium rounded-lg border border-emerald-200">
                 {benefit}
               </span>
             ))}
@@ -258,15 +260,15 @@ export function DynamicJobDetail({ rawJson, companyName }: DynamicJobDetailProps
       
       {/* 기업 문화 */}
       {culture && (culture.keywords || culture.description) && (
-        <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-violet-800 mb-3">
+        <div className="bg-teal-50 rounded-xl p-4 border border-teal-100">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-teal-800 mb-3">
             <Users size={16} />
             기업 문화
           </h3>
           {culture.keywords && culture.keywords.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {culture.keywords.map((keyword, idx) => (
-                <span key={idx} className="px-3 py-1.5 bg-white text-violet-700 text-xs font-bold rounded-lg border border-violet-200">
+                <span key={idx} className="px-3 py-1.5 bg-white text-teal-700 text-xs font-medium rounded-lg border border-teal-200">
                   #{keyword}
                 </span>
               ))}
