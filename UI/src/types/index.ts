@@ -1,4 +1,4 @@
-export type JobStatus = 'INBOX' | 'WRITING' | 'APPLIED' | 'IN_PROGRESS' | 'PASSED' | 'FAILED';
+export type JobStatus = 'PENDING' | 'DRAFT' | 'APPLIED' | 'CLOSED';
 
 export interface Job{
   id: number;
