@@ -74,7 +74,7 @@ public class JobService {
                 .userId(userId) // 임시: 1번 유저 (나중에 로그인 연동 시 변경)
                 .companyName(companyName) 
                 .roleName(roleName)
-                .status(JobStatus.INBOX)
+                .status(JobStatus.PENDING)
                 .originalUrl(originalUrl)
                 .jobDetailJson(jsonString)// 전체 JSON 백업
                 .screenshot(imageBase64) // 📸 스크린샷 저장
