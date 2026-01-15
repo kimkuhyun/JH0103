@@ -43,12 +43,16 @@ CareerOS Collector는 로컬에서 작동하는 AI 취업준비 시스템입니�
 JH0103/
 ├── .github/workflows/          CI/CD 설정
 ├── UI/                         웹 애플리케이션
-│   ├── src/
-│   │   ├── components/        UI 컴포넌트
-│   │   ├── pages/            화면 페이지
-│   │   ├── types/            타입 정의
-│   │   └── utils/            핵심 로직
-│   └── package.json          의존성 관리
+│   └── src/
+│       ├── components/        UI 컴포넌트
+│       │   ├── job/          공고 관련
+│       │   ├── layout/       레이아웃
+│       │   ├── map/          지도
+│       │   ├── settings/     설정
+│       │   └── views/        화면
+│       ├── pages/            화면 페이지
+│       ├── types/            타입 정의
+│       └── utils/            핵심 로직
 ├── ai-engine/collectorAI/     이미지 분석 서버
 │   ├── config.py             모델 설정
 │   ├── server.py             메인 서버
@@ -90,7 +94,7 @@ JH0103/
 
 ### 2.2 UI (프론트엔드)
 
-**위치**: `UI/`
+**위치**: `UI/src/`
 
 #### 설정 파일
 - `package.json` - 의존성 라이브러리 목록
@@ -100,38 +104,34 @@ JH0103/
 
 #### 진입점
 - `index.html` - HTML 진입점
-- `src/main.tsx` - React 진입점
-- `src/App.tsx` - 라우팅 설정
+- `main.tsx` - React 진입점
+- `App.tsx` - 라우팅 설정
 
-#### 컴포넌트 (`src/components/`)
+#### 컴포넌트 (`components/`)
 
-**레이아웃**
-- `layout/Sidebar.tsx` - 좌측 내비게이션
+**공고** (`job/`)
+- `DynamicJobDetail.tsx` - 공고 상세 화면
 
-**지도**
-- `map/KakaoMapContainer.tsx` - 카카오맵 연동
-- `map/TransitRouteOverlay.tsx` - 대중교통 경로 표시
+**레이아웃** (`layout/`)
+- `Sidebar.tsx` - 좌측 내비게이션
 
-**설정**
-- `settings/HomeLocationSettings.tsx` - 거주지 설정
+**지도** (`map/`)
+- `KakaoMapContainer.tsx` - 카카오맵 연동
+- `TransitRouteOverlay.tsx` - 대중교통 경로 표시
 
-**화면**
-- `views/AuthView.tsx` - 로그인 화면
+**설정** (`settings/`)
+- `HomeLocationSettings.tsx` - 거주지 설정
 
-**공고**
-- `job/DynamicJobDetail.tsx` - 공고 상세 화면
+**화면** (`views/`)
+- `AuthView.tsx` - 로그인 화면
 
-#### 페이지 (`src/pages/`)
+#### 페이지 (`pages/`)
 - `Dashboard.tsx` - 메인 대시보드
 
-#### 타입 정의 (`src/types/`)
+#### 타입 정의 (`types/`)
 - `index.ts` - 전역 타입 정의
-  - `Job` - 공고 데이터
-  - `JobJsonV2` - AI 분석 결과
-  - `JobStatus` - 공고 상태
-  - `TransitRoute` - 경로 정보
 
-#### 핵심 로직 (`src/utils/`)
+#### 핵심 로직 (`utils/`)
 - `jsonNormalizer.ts` - JSON 처리 중앙 모듈
 - `jobParser.ts` - Job 모델 변환
 - `odsayApi.ts` - 대중교통 API 연동
@@ -207,22 +207,13 @@ JH0103/
 
 ```typescript
 // JSON 검증 및 변환
-normalizeJobJson(rawJson: any): JobJsonV2
+export function normalizeJobJson(rawJson: any): NormalizedJobJson
 
 // 주소 정제
-cleanAddress(address: string): string
-
-// 회사명 추출
-extractCompanyName(json: any): string
-
-// 포지션 제목 추출
-extractPositionTitle(json: any): string
+export function cleanAddress(address: string): string
 
 // 파일명 생성
-generateJobFilename(json: any): string
-
-// 상태 정규화
-normalizeJobStatus(status: string): JobStatus
+export function generateJobFilename(normalized: NormalizedJobJson): string
 ```
 
 ### 3.2 Job 모델 변환 (jobParser.ts)
@@ -231,10 +222,7 @@ normalizeJobStatus(status: string): JobStatus
 
 ```typescript
 // JSON을 Job 객체로 변환
-parseJobFromJson(jsonData: any): Job
-
-// 파싱 실패 시 기본값 생성
-createFallbackJob(): Job
+export const parseJsonToJob = async (rawJson: any): Promise<Job>
 ```
 
 ### 3.3 대중교통 API (odsayApi.ts)
@@ -243,10 +231,18 @@ createFallbackJob(): Job
 
 ```typescript
 // 경로 검색
-searchRoute(startX, startY, endX, endY): Promise<TransitRoute>
+export async function searchTransitRoute(
+  startLat: number,
+  startLng: number,
+  endLat: number,
+  endLng: number
+): Promise<TransitRoute[]>
 
-// 소요시간 포맷팅
-formatTransitTime(minutes: number): string
+// 경로 정보 포맷팅
+export function formatRouteInfo(route: TransitRoute): string
+
+// 경로 타입 아이콘
+export function getRouteTypeIcon(pathType: number): string
 ```
 
 ### 3.4 카카오맵 (KakaoMapContainer.tsx)
@@ -255,7 +251,7 @@ formatTransitTime(minutes: number): string
 
 ```typescript
 // 주소를 좌표로 변환
-getCoordsFromAddress(address: string): Promise<{lat, lng}>
+export const getCoordsFromAddress = (address: string): Promise<{lat: number, lng: number}>
 ```
 
 ### 3.5 AI 서버 (server.py)
@@ -263,124 +259,28 @@ getCoordsFromAddress(address: string): Promise<{lat, lng}>
 **위치**: `ai-engine/collectorAI/server.py`
 
 ```python
+# 파일명 생성
+def generate_simple_filename(job_id)
+
 # 이미지 최적화
-optimize_image(base64_str: str) -> str
+def optimize_image(base64_str)
 
 # AI 분석
-analyze_with_ollama(image_data: str, url: str) -> dict
+def analyze_with_ollama(image_b64, prompt)
 
 # 백그라운드 작업 처리
-worker() -> None
-
-# 파일명 생성
-generate_simple_filename(job_id: str) -> str
+def worker()
 
 # API 엔드포인트
 @app.route('/analyze', methods=['POST'])
 @app.route('/status/<job_id>', methods=['GET'])
-@app.route('/health', methods=['GET'])
-```
-
-### 3.6 Extension 백그라운드 (background.js)
-
-**위치**: `extension/background.js`
-
-```javascript
-// 원클릭 캡처 시작
-startOneClickCapture(tabId)
-
-// 전체 페이지 캡처
-captureFullPage(tabId, bounds)
-
-// 서버 전송
-sendToServer(imageData, metadata)
-```
-
-### 3.7 Extension 콘텐츠 (content.js)
-
-**위치**: `extension/content.js`
-
-```javascript
-// 토스트 알림 클래스
-class ToastNotification {
-  show(message, duration)
-  hide()
-}
-
-// 불필요한 요소 제거
-removeUnnecessaryElements()
-
-// 메타데이터 추출
-extractMetadata()
-
-// 메인 콘텐츠 영역 계산
-getMainContentBounds()
-
-// 사이트 감지
-detectSite()
-```
-
-### 3.8 백엔드 서비스 (JobService.java)
-
-**위치**: `src/main/java/com/jh0103/core/job/service/JobService.java`
-
-```java
-// 공고 생성
-createJob(jobData) -> Job
-
-// 공고 조회
-getJobById(id) -> Job
-getAllJobs() -> List<Job>
-getJobsByStatus(status) -> List<Job>
-
-// 공고 수정
-updateJob(id, jobData) -> Job
-updateJobStatus(id, status) -> Job
-
-// 공고 삭제
-deleteJob(id) -> void
 ```
 
 ---
 
-## 4. 사이트별 설정
+## 4. 데이터 흐름
 
-### 4.1 지원 사이트 (content.js)
-
-**위치**: `extension/content.js`의 `SITE_CONFIGS`
-
-```javascript
-SITE_CONFIGS = {
-  saramin: {
-    mainSelector: 'section[class*="jview-0-"]',
-    trash: ['.jview_header', '.starRate', '.aside_wrap', ...]
-  },
-  
-  jobkorea: {
-    mainSelector: '#container',
-    trash: ['.sameWork', '.rdContent', ...]
-  },
-  
-  wanted: {
-    mainSelector: '.JobContent_JobContent__Qb6DR',
-    trash: [
-      '.JobAssociated_JobAssociated__XGF86',
-      '[class*="RelatedJobs"]',
-      ...
-    ]
-  }
-}
-```
-
-### 4.2 메타데이터 선택자
-
-각 사이트별 회사명, 제목, 급여, 위치 등의 정보 추출 선택자가 `extractMetadata()` 함수에 정의되어 있습니다.
-
----
-
-## 5. 데이터 흐름
-
-### 5.1 공고 수집 흐름
+### 4.1 공고 수집 흐름
 
 ```
 1. 사용자가 Alt+Shift+S 또는 팝업 버튼 클릭
@@ -400,7 +300,7 @@ SITE_CONFIGS = {
 8. 완료되면 결과 표시
 ```
 
-### 5.2 JSON 처리 흐름
+### 4.2 JSON 처리 흐름
 
 ```
 1. AI 서버가 RAW JSON 생성
@@ -411,7 +311,7 @@ SITE_CONFIGS = {
    ↓
 4. V1 → V2 변환, 주소 정제, 회사명 추출 등
    ↓
-5. jobParser.parseJobFromJson() 호출
+5. jobParser.parseJsonToJob() 호출
    ↓
 6. Job 모델 객체 생성
    ↓
@@ -420,23 +320,23 @@ SITE_CONFIGS = {
 
 ---
 
-## 6. 환경 변수
+## 5. 환경 변수
 
-### 6.1 프론트엔드 (.env)
+### 5.1 프론트엔드 (.env)
 
 ```
 VITE_API_BASE_URL=http://localhost:8080
-VITE_KAKAO_MAP_KEY=카카오맵_API_키
+VITE_KAKAO_MAP_API_KEY=카카오맵_API_키
 VITE_ODSAY_API_KEY=ODsay_API_키
 ```
 
-### 6.2 백엔드
+### 5.2 백엔드
 
 application.properties에 데이터베이스 설정 등이 포함되어 있습니다.
 
 ---
 
-## 7. 빠른 참조
+## 6. 빠른 참조
 
 ### 공고 상태 (JobStatus)
 - `PENDING` - 대기 중
@@ -454,4 +354,3 @@ application.properties에 데이터베이스 설정 등이 포함되어 있습�
 - 포맷: JPEG
 - 품질: 80
 - 최대 너비: 1000px
-- 세로 길이: 제한 없음
