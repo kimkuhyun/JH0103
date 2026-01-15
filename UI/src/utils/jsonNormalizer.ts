@@ -73,26 +73,19 @@ function safeArray(value: any): string[] {
  */
 export function cleanAddress(address: string): string {
   if (!address) return '';
-  
-  let cleaned = address
-    // 접두어 제거
-    .replace(/^(근무지|주소|위치|근무장소)[:\s]*/g, '')
-    // 괄호 안 내용 제거
-    .replace(/\(.*?\)/g, '')
-    // 대괄호 안 내용 제거
-    .replace(/\[.*?\]/g, '')
-    .trim();
-  
-  // 상세 주소 패턴 추출 (도로명/지번 주소)
-  const addressMatch = cleaned.match(/([가-힣A-Za-z0-9\s\-\.]+(?:로|길|동|가|읍|면|리)\s*\d+(?:-\d+)?)/);
-  
-  if (addressMatch) {
-    cleaned = addressMatch[0].trim();
-  }
-  
-  return cleaned || '위치 정보 없음';
-}
 
+  let cleaned = address
+    .replace(/^(근무지|주소|위치|근무장소)[:\s]*/g, '')
+    .replace(/\(.*?\)|\[.*?\]/g, '')
+    .split(/,|층|호/)[0] 
+    .trim();
+
+  const addressMatch = cleaned.match(
+    /([가-힣A-Za-z\s]+(?:로|길|동|가|읍|면|리)\s*\d+(?:-\d+)?)/
+  );
+
+  return addressMatch ? addressMatch[0].trim() : cleaned; 
+}
 /**
  * 회사명 추출 (우선순위 적용)
  */
