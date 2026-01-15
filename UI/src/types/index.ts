@@ -1,6 +1,44 @@
-export type JobStatus = 'INBOX' | 'WRITING' | 'APPLIED' | 'IN_PROGRESS' | 'PASSED' | 'FAILED';
+export type JobStatus = 
+  | 'INTERESTED'      // 관심
+  | 'WILL_APPLY'      // 지원 예정
+  | 'WRITING'         // 작성중
+  | 'APPLIED'         // 지원 완료
+  | 'DOCUMENT_PASS'   // 서류 합격
+  | 'INTERVIEW'       // 면접 진행
+  | 'FINAL_PASS'      // 최종 합격
+  | 'REJECTED'        // 불합격
+  | 'HOLD'            // 보류
+  | 'INBOX';          // 받은편지함 (기본)
 
-export interface Job{
+// JobStatus 한글 매핑
+export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
+  INTERESTED: '관심',
+  WILL_APPLY: '지원 예정',
+  WRITING: '작성중',
+  APPLIED: '지원 완료',
+  DOCUMENT_PASS: '서류 합격',
+  INTERVIEW: '면접 진행',
+  FINAL_PASS: '최종 합격',
+  REJECTED: '불합격',
+  HOLD: '보류',
+  INBOX: '받은편지함',
+};
+
+// 상태별 색상 매핑
+export const JOB_STATUS_COLORS: Record<JobStatus, { bg: string; text: string; border: string }> = {
+  INTERESTED: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' },
+  WILL_APPLY: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
+  WRITING: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
+  APPLIED: { bg: 'bg-teal-50', text: 'text-teal-600', border: 'border-teal-100' },
+  DOCUMENT_PASS: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-100' },
+  INTERVIEW: { bg: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-100' },
+  FINAL_PASS: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100' },
+  REJECTED: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-100' },
+  HOLD: { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200' },
+  INBOX: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
+};
+
+export interface Job {
   id: number;
   company: string;
   role: string;
@@ -12,7 +50,7 @@ export interface Job{
   lat: number;
   lng: number;
   detail?: JobDetail;
-  rawJson?: any; // 원본 JSON 데이터 보관
+  rawJson?: any;
 }
 
 export interface JobDetail {
@@ -36,7 +74,6 @@ export interface BackendJob {
   createdAt: string;
 }
 
-// 새로운 JSON 구조 (v2.0)
 export interface JobJsonV2 {
   meta?: {
     url?: string;
@@ -86,7 +123,6 @@ export interface JobJsonV2 {
   };
   additional_info?: any;
   
-  // 구버전 호환성
   job_summary?: {
     company?: string;
     title?: string;
