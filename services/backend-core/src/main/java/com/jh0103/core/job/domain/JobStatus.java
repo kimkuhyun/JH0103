@@ -1,4 +1,4 @@
-package com.jobhub.domain.job.domain;
+package com.jh0103.core.job.domain;
 
 public enum JobStatus {
     INBOX("받은편지함"),

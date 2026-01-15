@@ -3,6 +3,7 @@ package com.jh0103.core.job.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper; 
 import com.jh0103.core.job.domain.Job;
+import com.jh0103.core.job.domain.JobStatus;
 import com.jh0103.core.job.repository.JobRepository;
 import com.jh0103.core.user.domain.User;
 import com.jh0103.core.user.repository.UserRepository;
@@ -73,7 +74,7 @@ public class JobService {
                 .userId(userId) // 임시: 1번 유저 (나중에 로그인 연동 시 변경)
                 .companyName(companyName) 
                 .roleName(roleName)
-                .status("INBOX")
+                .status(JobStatus.INBOX)
                 .originalUrl(originalUrl)
                 .jobDetailJson(jsonString)// 전체 JSON 백업
                 .screenshot(imageBase64) // 📸 스크린샷 저장
@@ -91,5 +92,13 @@ public class JobService {
     @Transactional
     public void deleteJob(Long jobId) {
         jobRepository.deleteById(jobId);
+    }
+
+    @Transactional
+    public void updateJobStatus(Long jobId, JobStatus status) {
+        Job job = jobRepository.findById(jobId)
+            .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
+        job.updateStatus(status);
+        jobRepository.save(job);
     }
 }

@@ -2,6 +2,7 @@ package com.jh0103.core.job.controller;
 
 import com.jh0103.core.job.domain.Job;
 import com.jh0103.core.job.service.JobService;
+import com.jh0103.core.job.dto.UpdateJobStatusRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,5 +35,14 @@ public class JobController {
     public ResponseEntity<Void> deleteJob(@PathVariable Long id) {
         jobService.deleteJob(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{jobId}/status")
+    public ResponseEntity<Void> updateJobStatus(
+        @PathVariable Long jobId,
+        @RequestBody UpdateJobStatusRequest request
+    ) {
+        jobService.updateJobStatus(jobId, request.getStatus());
+        return ResponseEntity.ok().build();
     }
 }

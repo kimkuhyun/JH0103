@@ -1,6 +1,6 @@
-package com.jobhub.domain.job.dto;
+package com.jh0103.core.job.dto;
 
-import com.jobhub.domain.job.domain.JobStatus;
+import com.jh0103.core.job.domain.JobStatus;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 

@@ -25,8 +25,9 @@ public class Job {
     @Column(name = "role_name", nullable = false)
     private String roleName;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String status; 
+    private JobStatus status;
 
     @Column(name = "original_url", length = 2083)
     private String originalUrl;
@@ -41,6 +42,7 @@ public class Job {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
@@ -48,7 +50,7 @@ public class Job {
 
     @Builder
     // 생성자에도 screenshot 파라미터 추가
-    public Job(Long userId, String companyName, String roleName, String status, 
+    public Job(Long userId, String companyName, String roleName, JobStatus status, 
                String originalUrl, String jobDetailJson, String screenshot) {
         this.userId = userId;
         this.companyName = companyName;
@@ -59,7 +61,7 @@ public class Job {
         this.screenshot = screenshot; 
     }
     
-    public void updateStatus(String newStatus) {
-        this.status = newStatus;
+    public void updateStatus(JobStatus status) {
+        this.status = status;
     }
 }
