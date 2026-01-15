@@ -24,7 +24,7 @@ public class Job {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private JobStatus status = JobStatus.INBOX;
+    private JobStatus status = JobStatus.PENDING;
 
     @Column(nullable = false, length = 1000)
     private String originalUrl;
