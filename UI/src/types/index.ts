@@ -18,6 +18,28 @@ export const JOB_STATUS_COLORS: Record<JobStatus, { bg: string; text: string; bo
   CLOSED: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' },
 };
 
+// 구버전 상태를 신버전으로 변환
+export const normalizeJobStatus = (status: string): JobStatus => {
+  const statusMap: Record<string, JobStatus> = {
+    'INBOX': 'PENDING',
+    'WRITING': 'DRAFT',
+    'APPLIED': 'APPLIED',
+    'IN_PROGRESS': 'APPLIED',
+    'PASSED': 'APPLIED',
+    'FAILED': 'CLOSED',
+    'ARCHIVED': 'CLOSED',
+    'INTERESTED': 'PENDING',
+    'WILL_APPLY': 'PENDING',
+    'DOCUMENT_PASS': 'APPLIED',
+    'INTERVIEW': 'APPLIED',
+    'FINAL_PASS': 'APPLIED',
+    'REJECTED': 'CLOSED',
+    'HOLD': 'CLOSED',
+  };
+  
+  return statusMap[status] || 'PENDING';
+};
+
 export interface Job {
   id: number;
   company: string;
