@@ -13,6 +13,14 @@ interface HomeLocation {
   lng: number;
 }
 
+// ✅ 상태별 스타일 매핑
+const STATUS_CONFIG: Record<JobStatus, { bg: string; text: string; border: string; label: string }> = {
+  PENDING: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100', label: '대기중' },
+  DRAFT: { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-100', label: '작성중' },
+  APPLIED: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-100', label: '지원 완료' },
+  CLOSED: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', label: '종료됨' }
+};
+
 export function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
@@ -286,6 +294,7 @@ export function Dashboard() {
             )}
             {jobs.map(job => {
               const isLoadingRoute = loadingRoutes.has(job.id);
+              const statusStyle = STATUS_CONFIG[job.status]; // ✅ 상태별 스타일 가져오기
               
               return (
                 <div 
@@ -295,7 +304,7 @@ export function Dashboard() {
                   selectedJobId === job.id ? 'bg-white border-teal-500 ring-2 ring-teal-50 shadow-md' : 'bg-white border-slate-200 hover:border-teal-300'
                 }`}
               >
-                {/* ✅ [추가] 우측 상단 삭제 버튼 (마우스 올렸을 때만 표시: opacity-0 group-hover:opacity-100) */}
+                {/* ✅ 우측 상단 삭제 버튼 */}
                 <button
                   onClick={(e) => handleDelete(job.id, e)}
                   className="absolute top-4 right-4 p-1.5 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100 z-10"
@@ -308,11 +317,8 @@ export function Dashboard() {
                     <div className="font-bold text-slate-800 truncate pr-2 flex items-center gap-2">
                       {job.company}
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${
-                      job.status === 'INBOX' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-                      'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}>
-                      {job.status}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                      {statusStyle.label}
                     </span>
                   </div>
                   
@@ -437,7 +443,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2">
-                   {/* 기존 원문 보기 버튼 (너비 조정: w-full -> flex-1) */}
+                   {/* 기존 원문 보기 버튼 */}
                    <button 
                      onClick={() => setIsScreenshotOpen(true)}
                      className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
@@ -445,7 +451,7 @@ export function Dashboard() {
                      <Maximize2 size={16} /> 원문 보기
                    </button>
 
-                   {/* ✅ [추가] 삭제 버튼 */}
+                   {/* 삭제 버튼 */}
                    <button 
                      onClick={() => handleDelete(selectedJob.id)}
                      className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors active:scale-95 border border-red-100"
@@ -475,11 +481,11 @@ export function Dashboard() {
       {isScreenshotOpen && selectedJob && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-10 animate-fade-in cursor-pointer"
-          onClick={() => setIsScreenshotOpen(false)} // 1. 배경 누르면 닫기
+          onClick={() => setIsScreenshotOpen(false)}
         >
           <div 
             className="bg-white w-[800px] h-[90%] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-slide-up cursor-default"
-            onClick={(e) => e.stopPropagation()} // 2. 내용 누르면 닫기 방지 (이벤트 전파 중단)
+            onClick={(e) => e.stopPropagation()}
           >
             
             {/* 모달 헤더 */}
@@ -498,7 +504,6 @@ export function Dashboard() {
                 </a>
               </div>
               
-              {/* 3. 닫기 버튼 (명시적) */}
               <button 
                 onClick={() => setIsScreenshotOpen(false)}
                 className="p-2 hover:bg-slate-100 rounded-full transition-colors group"
