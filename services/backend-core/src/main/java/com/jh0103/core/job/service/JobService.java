@@ -74,7 +74,7 @@ public class JobService {
                 .userId(userId)
                 .companyName(companyName) 
                 .roleName(roleName)
-                .status(JobStatus.PENDING) // ✅ INBOX → PENDING 변경
+                .status(JobStatus.PENDING)
                 .originalUrl(originalUrl)
                 .jobDetailJson(jsonString)
                 .screenshot(imageBase64)
@@ -93,5 +93,13 @@ public class JobService {
     @Transactional
     public void deleteJob(Long jobId) {
         jobRepository.deleteById(jobId);
+    }
+
+    @Transactional
+    public void updateJobStatus(Long jobId, JobStatus status) {
+        Job job = jobRepository.findById(jobId)
+            .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
+        job.updateStatus(status);
+        jobRepository.save(job);
     }
 }

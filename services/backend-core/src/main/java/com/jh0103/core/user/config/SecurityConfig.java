@@ -30,6 +30,8 @@ public class SecurityConfig {
             .headers(headers -> headers.frameOptions(frame -> frame.disable()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/v1/jobs/**").permitAll()
+                .requestMatchers(HttpMethod.PATCH, "/api/v1/jobs/**").permitAll()
+                .requestMatchers(HttpMethod.DELETE, "/api/v1/jobs/**").permitAll()
                 .requestMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**").permitAll()
                 .anyRequest().authenticated()
             )
@@ -57,7 +59,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         
         configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173")); 
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true); 
 

@@ -8,7 +8,6 @@ import threading
 import queue
 import uuid
 import time
-import re
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -36,15 +35,23 @@ job_queue = queue.Queue()
 job_results = {}
 job_lock = threading.Lock()
 
-def sanitize_filename(title, max_length=100):
-    """파일명으로 사용할 수 있도록 문자열 정제"""
-    # 특수문자 제거 (영문, 한글, 숫자, 공백, 하이픈, 언더스코어만 허용)
-    safe_title = re.sub(r'[^\w\s-]', '', title, flags=re.UNICODE)
-    # 연속된 공백을 하나로
-    safe_title = re.sub(r'\s+', ' ', safe_title)
-    # 앞뒤 공백 제거 및 길이 제한
-    safe_title = safe_title.strip()[:max_length]
-    return safe_title if safe_title else 'unknown_job'
+def generate_simple_filename(job_id):
+    """
+    간소화된 파일명 생성 (JSON 파싱 없음)
+    파일명 형식: {timestamp}_{job_id}.json
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{timestamp}_{job_id}.json"
+    filepath = os.path.join(JSON_DIR, filename)
+    
+    # 중복 방지
+    counter = 1
+    while os.path.exists(filepath):
+        filename = f"{timestamp}_{job_id}_{counter}.json"
+        filepath = os.path.join(JSON_DIR, filename)
+        counter += 1
+    
+    return filename, filepath
 
 def optimize_image(base64_str):
     """이미지 리사이징 및 최적화 (AI 메모리 폭발 방지)"""
@@ -62,8 +69,6 @@ def optimize_image(base64_str):
         if img.width > max_w:
             ratio = max_w / img.width
             new_h = int(img.height * ratio)
-            # 세로 길이가 너무 길면(예: 8000px 이상) 잘라낼 수도 있지만, 
-            # 현재는 전체 내용을 유지하기 위해 리사이즈만 수행
             img = img.resize((max_w, new_h), Image.Resampling.LANCZOS)
             
         # 다시 Base64로 변환
@@ -98,8 +103,12 @@ def analyze_with_ollama(image_b64, prompt):
         # JSON 문자열 파싱
         return json.loads(result['response'])
         
+    except json.JSONDecodeError as e:
+        print(f"[Ollama] JSON 파싱 오류: {e}")
+        print(f"[Ollama] 원본 응답: {result.get('response', '')[:500]}")
+        return None
     except Exception as e:
-        print(f"[Ollama Error] {e}")
+        print(f"[Ollama] API 오류: {e}")
         return None
 
 def worker():
@@ -125,61 +134,39 @@ def worker():
             # 4. 결과 저장 및 상태 업데이트
             if result_json:
                 try:
+                    # ✅ Backend로 RAW JSON 전송 (파싱 없음)
                     payload = {
                         "job_summary": result_json,
                         "url": url,
                         "image_base64": image_data,
                         "user_email": user_email
                     }
-                    requests.post(BACKEND_API_URL, json=payload)
+                    requests.post(BACKEND_API_URL, json=payload, timeout=30)
                     print(f"[워커] 자바 서버 전송 완료")
                 except Exception as e:
                     print(f"[워커] 자바 서버 전송 실패: {e}")
 
-                # 공고 타이틀로 파일명 생성
-                summary = result_json.get('job_summary', {})
-                company = summary.get('company_name', '').strip()
-                if not company and metadata:  
-                    company = metadata.get('company', '').strip()
-
-                job_title = summary.get('title', '').strip()
-                if not job_title and metadata:
-                    job_title = metadata.get('title', '').strip()
+                # ✅ 간소화된 파일명 생성 (JSON 파싱 없음)
+                filename, filepath = generate_simple_filename(job_id)
                 
-                if company and job_title:
-                    raw_name = f"{company}_{job_title}"
-                elif job_title:
-                    raw_name = f"UnknownCompany_{job_title}"
-                elif company:
-                    raw_name = f"{company}_Untitled"
-                else:
-                    raw_name = f"result_{job_id}"
-                
-                safe_title = sanitize_filename(raw_name)
-                filename = f"{safe_title}.json"
-
-                # 파일명 중복 방지
-                filepath = os.path.join(JSON_DIR, filename)
-                counter = 1
-                while os.path.exists(filepath):
-                    filename = f"{safe_title}_{counter}.json"
-                    filepath = os.path.join(JSON_DIR, filename)
-                    counter += 1
-                
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    json.dump(result_json, f, ensure_ascii=False, indent=2)
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(result_json, f, ensure_ascii=False, indent=2)
+                    print(f"[워커] 파일 저장 완료: {filename}")
+                except Exception as e:
+                    print(f"[워커] 파일 저장 실패: {e}")
                     
                 with job_lock:
                     job_results[job_id] = {
                         "status": "success",
                         "data": result_json
                     }
-                print(f"[워커] 작업 성공: {job_id} -> {filename}")
+                print(f"[워커] 작업 성공: {job_id}")
             else:
                 with job_lock:
                     job_results[job_id] = {
                         "status": "error",
-                        "message": "AI 분석 실패 (응답 없음)"
+                        "message": "AI 분석 실패 (응답 없음 또는 JSON 파싱 오류)"
                     }
                 print(f"[워커] 작업 실패: {job_id}")
 
@@ -187,6 +174,8 @@ def worker():
             
         except Exception as e:
             print(f"[워커] 예외 발생: {e}")
+            import traceback
+            traceback.print_exc()
             with job_lock:
                 job_results[job_id] = {"status": "error", "message": str(e)}
 
