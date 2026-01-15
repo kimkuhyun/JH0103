@@ -3,6 +3,7 @@ package com.jh0103.core.job.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper; 
 import com.jh0103.core.job.domain.Job;
+import com.jh0103.core.job.domain.JobStatus;
 import com.jh0103.core.job.repository.JobRepository;
 import com.jh0103.core.user.domain.User;
 import com.jh0103.core.user.repository.UserRepository;
@@ -70,13 +71,13 @@ public class JobService {
 
         // 2. 엔티티 생성
         Job job = Job.builder()
-                .userId(userId) // 임시: 1번 유저 (나중에 로그인 연동 시 변경)
+                .userId(userId)
                 .companyName(companyName) 
                 .roleName(roleName)
-                .status("INBOX")
+                .status(JobStatus.PENDING) // ✅ INBOX → PENDING 변경
                 .originalUrl(originalUrl)
-                .jobDetailJson(jsonString)// 전체 JSON 백업
-                .screenshot(imageBase64) // 📸 스크린샷 저장
+                .jobDetailJson(jsonString)
+                .screenshot(imageBase64)
                 .build();
 
         // 3. DB 저장
@@ -88,6 +89,7 @@ public class JobService {
     public List<Job> getAllJobs() {
         return jobRepository.findAllByOrderByCreatedAtDesc();
     }
+    
     @Transactional
     public void deleteJob(Long jobId) {
         jobRepository.deleteById(jobId);
