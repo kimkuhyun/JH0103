@@ -2,6 +2,33 @@
 
 채용공고 수집 및 분석 시스템의 전체 파일 구조와 주요 기능을 정리한 문서입니다.
 
+## 프로젝트 개요
+
+CareerOS Collector AI는 채용 사이트의 공고를 자동으로 캡처하고 AI로 분석하여 구조화된 데이터로 변환하는 시스템입니다.
+
+**주요 기능**
+- 원클릭 채용공고 자동 캡처 (Alt+Shift+S)
+- AI 기반 공고 정보 자동 추출 및 구조화
+- 동적 섹션 기반 유연한 공고 표시
+- 카카오맵 연동 회사 위치 표시
+- ODsay API 연동 대중교통 경로 안내
+- 공고 상태 관리 (PENDING, DRAFT, APPLIED, CLOSED)
+
+**지원 사이트**
+- 사람인 (saramin.co.kr)
+- 잡코리아 (jobkorea.co.kr)
+- 원티드 (wanted.co.kr)
+
+**기술 스택**
+- 프론트엔드: React, TypeScript, Vite, Tailwind CSS
+- 백엔드: Java Spring Boot, PostgreSQL
+- AI 엔진: Python, Ollama (llama3.2-vision:11b)
+- 확장프로그램: Chrome Extension (Manifest V3)
+
+더 자세한 개발 히스토리는 [HISTORY.md](HISTORY.md)를 참고하세요.
+
+---
+
 ## 목차
 1. [프로젝트 구조](#1-프로젝트-구조)
 2. [상세 파일 색인](#2-상세-파일-색인)
