@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import type { Job, JobStatus, BackendJob } from '../types/index';
+import type { Job, JobStatus, BackendJob, JOB_STATUS_LABELS, JOB_STATUS_COLORS } from '../types/index';
+import { JOB_STATUS_LABELS as STATUS_LABELS, JOB_STATUS_COLORS as STATUS_COLORS } from '../types/index';
 import { KakaoMapContainer } from '../components/map/KakaoMapContainer';
-import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Building2, Home as HomeIcon, Maximize2, Trash2, Briefcase} from 'lucide-react';
+import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Building2, Home as HomeIcon, Maximize2, Trash2, Briefcase, Search, Check} from 'lucide-react';
 import { parseJsonToJob } from '../utils/jobParser';
 import { normalizeJobJson } from '../utils/jsonNormalizer';
 import { HomeLocationSettings } from '../components/settings/HomeLocationSettings';
@@ -15,35 +16,21 @@ interface HomeLocation {
   lng: number;
 }
 
-/**
- * 주소를 간결하게 표시 (시/구 레벨만)
- */
 function getShortLocation(fullAddress: string): string {
   if (!fullAddress || fullAddress === '위치 정보 없음' || fullAddress === '알 수 없음') {
     return '위치 미상';
   }
-  
-  // "서울 강남구 논현로149길 5" → "서울 강남구"
-  // "경기도 성남시 분당구 판교역로 ..." → "경기도 성남시"
   const parts = fullAddress.split(' ');
-  
   if (parts.length >= 2) {
     return `${parts[0]} ${parts[1]}`;
   }
-  
   return parts[0] || '위치 미상';
 }
 
-/**
- * Job의 role을 안전하게 추출 (fallback 포함)
- */
 function getJobRole(job: Job): string {
-  // 1순위: job.role이 유효한 값
   if (job.role && job.role !== '알 수 없는 직무' && job.role !== 'Untitled Role') {
     return job.role;
   }
-  
-  // 2순위: rawJson의 positions[0].title
   if (job.rawJson && job.rawJson.positions && job.rawJson.positions.length > 0) {
     const title = job.rawJson.positions[0].title;
     if (title) {
@@ -53,13 +40,9 @@ function getJobRole(job: Job): string {
       return title;
     }
   }
-  
-  // 3순위: rawJson의 job_summary.title (구버전)
   if (job.rawJson && (job.rawJson as any).job_summary?.title) {
     return (job.rawJson as any).job_summary.title;
   }
-  
-  // 최종 fallback
   return '포지션 정보 없음';
 }
 
@@ -72,44 +55,44 @@ export function Dashboard() {
   const [loadingRoutes, setLoadingRoutes] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
+  // 검색 및 필터
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<JobStatus | 'ALL'>('ALL');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+
+  // 일괄 삭제
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedJob = jobs.find(j => j.id === selectedJobId);
-
   const [isScreenshotOpen, setIsScreenshotOpen] = useState(false);
-  
+
   useEffect(() => {
     const fetchJobs = async () => {
       setIsLoading(true);
       try {
         const response = await fetch('/api/v1/jobs');
-        
         if (!response.ok) {
           throw new Error(`서버 오류: ${response.status}`);
         }
-
         const backendData: BackendJob[] = await response.json();
-
         const convertedJobs = await Promise.all(
           backendData.map(async (dbJob) => {
             try {
               const jsonContent = JSON.parse(dbJob.jobDetailJson);
-              
-              // ✅ jsonNormalizer를 사용해서 JSON 정규화 (주소 정제 포함)
               const { normalized, companyName, positionTitle } = normalizeJobJson(jsonContent);
-              
-              // ✅ parseJsonToJob는 이미 정규화된 JSON을 받음
               const parsedJob = await parseJsonToJob(jsonContent);
-              
               return {
                 ...parsedJob,
-                id: dbJob.id, 
-                company: dbJob.companyName || companyName, // DB값 우선, 없으면 추출값
+                id: dbJob.id,
+                company: dbJob.companyName || companyName,
                 role: dbJob.roleName || positionTitle,
                 status: dbJob.status as JobStatus,
-                rawJson: normalized, // ⭐ 정규화된 JSON 저장
+                rawJson: normalized,
                 detail: {
-                    ...parsedJob.detail,
-                    screenshot: dbJob.screenshot || "" 
+                  ...parsedJob.detail,
+                  screenshot: dbJob.screenshot || ""
                 }
               };
             } catch (e) {
@@ -118,16 +101,13 @@ export function Dashboard() {
             }
           })
         );
-
         setJobs(convertedJobs.filter((j): j is Job => j !== null));
-
       } catch (error) {
         console.error('공고 로딩 실패:', error);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchJobs();
   }, []);
 
@@ -143,9 +123,7 @@ export function Dashboard() {
 
   const fetchTransitRoute = async (job: Job) => {
     if (!homeLocation) return;
-
     setLoadingRoutes(prev => new Set(prev).add(job.id));
-
     try {
       const routes = await searchTransitRoute(
         homeLocation.lat,
@@ -153,14 +131,12 @@ export function Dashboard() {
         job.lat,
         job.lng
       );
-
       if (routes && routes.length > 0) {
         const fastestRoute = routes[0];
         setTransitRoutes(prev => new Map(prev).set(job.id, fastestRoute));
-
-        setJobs(prevJobs => 
-          prevJobs.map(j => 
-            j.id === job.id 
+        setJobs(prevJobs =>
+          prevJobs.map(j =>
+            j.id === job.id
               ? { ...j, commuteTime: formatRouteInfo(fastestRoute) }
               : j
           )
@@ -168,9 +144,9 @@ export function Dashboard() {
       }
     } catch (error) {
       console.error(`경로 검색 실패 (${job.company}):`, error);
-      setJobs(prevJobs => 
-        prevJobs.map(j => 
-          j.id === job.id 
+      setJobs(prevJobs =>
+        prevJobs.map(j =>
+          j.id === job.id
             ? { ...j, commuteTime: '경로 검색 실패' }
             : j
         )
@@ -187,20 +163,16 @@ export function Dashboard() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const jsonContent = JSON.parse(e.target?.result as string);
         const newJob = await parseJsonToJob(jsonContent);
-        
         setJobs(prev => [newJob, ...prev]);
         setSelectedJobId(newJob.id);
-        
         if (homeLocation) {
           fetchTransitRoute(newJob);
         }
-        
         alert(`[${newJob.company}] 공고가 추가되었습니다.`);
       } catch (error) {
         console.error('JSON 파싱 오류:', error);
@@ -217,18 +189,14 @@ export function Dashboard() {
   };
 
   const handleDelete = async (id: number, e?: React.MouseEvent) => {
-    e?.stopPropagation(); 
-
+    e?.stopPropagation();
     if (!window.confirm("정말 이 공고를 삭제하시겠습니까?")) return;
-
     try {
       const response = await fetch(`/api/v1/jobs/${id}`, {
         method: 'DELETE',
       });
-
       if (response.ok) {
         setJobs(prev => prev.filter(job => job.id !== id));
-        
         if (selectedJobId === id) {
           setSelectedJobId(null);
         }
@@ -242,14 +210,61 @@ export function Dashboard() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedIds.size}개의 공고를 삭제하시겠습니까?`)) return;
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          fetch(`/api/v1/jobs/${id}`, { method: 'DELETE' })
+        )
+      );
+      setJobs(prev => prev.filter(job => !selectedIds.has(job.id)));
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      alert("선택한 공고가 삭제되었습니다.");
+    } catch (error) {
+      console.error(error);
+      alert("삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  const toggleSelection = (id: number) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredJobs.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredJobs.map(j => j.id)));
+    }
+  };
+
+  // 필터링된 공고 목록
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = searchQuery === '' || 
+      job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getJobRole(job).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesStatus = filterStatus === 'ALL' || job.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="flex flex-col h-full bg-white relative overflow-hidden">
-      {/* 헤더 */}
       <header className="h-[72px] border-b border-slate-100 flex items-center justify-between px-8 shrink-0 bg-white z-20 relative">
         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <Briefcase className="text-teal-600" /> 채용 공고 관리
         </h2>
-        
         <div className="flex gap-3">
           <button
             onClick={() => setShowHomeSettings(true)}
@@ -262,15 +277,14 @@ export function Dashboard() {
             <HomeIcon className="w-4 h-4" />
             {homeLocation ? '집 위치 변경' : '집 위치 설정'}
           </button>
-
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
             onChange={handleFileUpload}
-            className="hidden" 
+            className="hidden"
             accept=".json"
           />
-          <button 
+          <button
             onClick={() => fileInputRef.current?.click()}
             className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2 transition-all active:scale-95"
           >
@@ -279,64 +293,140 @@ export function Dashboard() {
         </div>
       </header>
 
-      {/* 메인 콘텐츠 */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* 왼쪽 리스트 */}
         <div className="w-[400px] flex flex-col border-r border-slate-200 bg-white z-10 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] shrink-0">
-          <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
-            <span className="font-bold text-slate-700">총 <span className="text-teal-600">{jobs.length}</span>건</span>
-            <button className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:bg-slate-50 px-2 py-1 rounded transition-colors">
-              <Filter size={14} /> 필터
-            </button>
+          <div className="p-5 border-b border-slate-100 bg-white sticky top-0 z-10 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-slate-700">총 <span className="text-teal-600">{filteredJobs.length}</span>건</span>
+              <div className="flex gap-2">
+                {isSelectionMode && (
+                  <>
+                    <button
+                      onClick={toggleSelectAll}
+                      className="flex items-center gap-1 text-xs font-bold text-teal-600 hover:bg-teal-50 px-2 py-1 rounded transition-colors"
+                    >
+                      <Check size={14} /> 전체선택
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={selectedIds.size === 0}
+                      className="flex items-center gap-1 text-xs font-bold text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 size={14} /> 삭제 ({selectedIds.size})
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => {
+                    setIsSelectionMode(!isSelectionMode);
+                    setSelectedIds(new Set());
+                  }}
+                  className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded transition-colors ${
+                    isSelectionMode ? 'bg-teal-50 text-teal-600' : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  선택
+                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                    className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:bg-slate-50 px-2 py-1 rounded transition-colors"
+                  >
+                    <Filter size={14} /> 필터
+                  </button>
+                  {showFilterDropdown && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-2 z-20">
+                      <button
+                        onClick={() => { setFilterStatus('ALL'); setShowFilterDropdown(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${filterStatus === 'ALL' ? 'text-teal-600 font-bold' : 'text-slate-700'}`}
+                      >
+                        전체 보기
+                      </button>
+                      {(Object.keys(STATUS_LABELS) as JobStatus[]).map(status => (
+                        <button
+                          key={status}
+                          onClick={() => { setFilterStatus(status); setShowFilterDropdown(false); }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${filterStatus === status ? 'text-teal-600 font-bold' : 'text-slate-700'}`}
+                        >
+                          {STATUS_LABELS[status]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="회사명, 직무, 태그 검색..."
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+              />
+            </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FAFAFA]">
             {isLoading && (
               <div className="text-center py-10 text-slate-400">
                 데이터를 불러오는 중입니다...
               </div>
             )}
-
-            {!isLoading && jobs.length === 0 && (
-               <div className="text-center py-10 text-slate-400">
-                 등록된 공고가 없습니다.
-               </div>
+            {!isLoading && filteredJobs.length === 0 && (
+              <div className="text-center py-10 text-slate-400">
+                {searchQuery || filterStatus !== 'ALL' ? '검색 결과가 없습니다.' : '등록된 공고가 없습니다.'}
+              </div>
             )}
-            {jobs.map(job => {
+            {filteredJobs.map(job => {
               const isLoadingRoute = loadingRoutes.has(job.id);
-              
+              const isSelected = selectedIds.has(job.id);
+              const colors = STATUS_COLORS[job.status];
               return (
-                <div 
-                  key={job.id} 
-                  onClick={() => setSelectedJobId(selectedJobId === job.id ? null : job.id)}
+                <div
+                  key={job.id}
+                  onClick={() => !isSelectionMode && setSelectedJobId(selectedJobId === job.id ? null : job.id)}
                   className={`p-5 rounded-2xl border cursor-pointer transition-all duration-200 group relative ${
-                  selectedJobId === job.id ? 'bg-white border-teal-500 ring-2 ring-teal-50 shadow-md' : 'bg-white border-slate-200 hover:border-teal-300'
-                }`}
-              >
-                <button
-                  onClick={(e) => handleDelete(job.id, e)}
-                  className="absolute top-4 right-4 p-1.5 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100 z-10"
-                  title="삭제"
+                    selectedJobId === job.id ? 'bg-white border-teal-500 ring-2 ring-teal-50 shadow-md' : 'bg-white border-slate-200 hover:border-teal-300'
+                  } ${isSelected ? 'ring-2 ring-teal-500' : ''}`}
                 >
-                  <Trash2 size={14} />
-                </button>
-                
-                  <div className="flex justify-between mb-2">
+                  {isSelectionMode && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(job.id);
+                      }}
+                      className="absolute top-4 left-4 z-10"
+                    >
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                        isSelected ? 'bg-teal-500 border-teal-500' : 'bg-white border-slate-300'
+                      }`}>
+                        {isSelected && <Check size={14} className="text-white" />}
+                      </div>
+                    </div>
+                  )}
+                  {!isSelectionMode && (
+                    <button
+                      onClick={(e) => handleDelete(job.id, e)}
+                      className="absolute top-4 right-4 p-1.5 bg-white text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all shadow-sm border border-slate-100 z-10"
+                      title="삭제"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                  <div className={`flex justify-between mb-2 ${isSelectionMode ? 'ml-8' : ''}`}>
                     <div className="font-bold text-slate-800 truncate pr-2 flex items-center gap-2">
                       {job.company}
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${
-                      job.status === 'INBOX' ? 'bg-blue-50 text-blue-600 border-blue-100' : 
-                      'bg-slate-100 text-slate-500 border-slate-200'
-                    }`}>
-                      {job.status}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold whitespace-nowrap ${colors.bg} ${colors.text} ${colors.border}`}>
+                      {STATUS_LABELS[job.status]}
                     </span>
                   </div>
-                  
                   <div className="text-sm text-slate-600 mb-3 font-medium line-clamp-2 leading-relaxed">
                     {getJobRole(job)}
                   </div>
-
                   {job.tags && job.tags.length > 0 && (
                     <div className="flex gap-1 mb-3 flex-wrap">
                       {job.tags.slice(0, 3).map((tag, i) => (
@@ -346,7 +436,6 @@ export function Dashboard() {
                       ))}
                     </div>
                   )}
-
                   <div className="flex items-center gap-3 text-xs text-slate-400 pt-3 border-t border-slate-50 group-hover:border-slate-100 transition-colors">
                     <span className="flex items-center gap-1.5 font-medium">
                       <Clock size={12} className="text-orange-400"/> {job.deadline}
@@ -362,13 +451,12 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* 중간 상세 패널 */}
         {selectedJob && (
           <div className="w-[500px] h-full bg-white shadow-lg z-10 overflow-y-auto border-l border-r border-slate-200 shrink-0">
             <div className="min-h-full pb-10">
               <div className="h-32 bg-gradient-to-r from-teal-500 to-emerald-600 relative p-6 flex justify-end items-start">
-                <button 
-                  onClick={() => setSelectedJobId(null)} 
+                <button
+                  onClick={() => setSelectedJobId(null)}
                   className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-full transition-all"
                 >
                   <X size={20} />
@@ -377,7 +465,6 @@ export function Dashboard() {
                   <Building2 className="w-8 h-8 text-teal-600" />
                 </div>
               </div>
-
               <div className="px-8 pt-12">
                 <h1 className="text-xl font-bold text-slate-900 leading-tight mb-2">
                   {getJobRole(selectedJob)}
@@ -389,8 +476,6 @@ export function Dashboard() {
                     <MapPin size={14} /> {getShortLocation(selectedJob.location)}
                   </span>
                 </div>
-
-                {/* 출퇴근 정보 */}
                 {homeLocation && transitRoutes.has(selectedJob.id) && (
                   <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4 mb-6">
                     <div className="flex items-center gap-2 text-sm font-bold text-teal-700 mb-2">
@@ -402,11 +487,9 @@ export function Dashboard() {
                     </div>
                   </div>
                 )}
-
-                {/* 동적 공고 상세 표시 */}
                 {selectedJob.rawJson ? (
-                  <DynamicJobDetail 
-                    rawJson={selectedJob.rawJson} 
+                  <DynamicJobDetail
+                    rawJson={selectedJob.rawJson}
                     companyName={selectedJob.company}
                   />
                 ) : (
@@ -414,48 +497,44 @@ export function Dashboard() {
                     상세 정보를 불러올 수 없습니다.
                   </div>
                 )}
-
                 <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 flex gap-2 mt-8">
-                   <button 
-                     onClick={() => setIsScreenshotOpen(true)}
-                     className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
-                   >
-                     <Maximize2 size={16} /> 원문 보기
-                   </button>
-
-                   <button 
-                     onClick={() => handleDelete(selectedJob.id)}
-                     className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors active:scale-95 border border-red-100"
-                     title="공고 삭제"
-                   >
-                     <Trash2 size={20} />
-                   </button>
+                  <button
+                    onClick={() => setIsScreenshotOpen(true)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                  >
+                    <Maximize2 size={16} /> 원문 보기
+                  </button>
+                  <button
+                    onClick={() => handleDelete(selectedJob.id)}
+                    className="px-4 py-3.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors active:scale-95 border border-red-100"
+                    title="공고 삭제"
+                  >
+                    <Trash2 size={20} />
+                  </button>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 오른쪽 지도 */}
         <div className="flex-1 relative bg-slate-100 overflow-hidden">
-          <KakaoMapContainer 
-            jobs={jobs} 
-            selectedJobId={selectedJobId} 
+          <KakaoMapContainer
+            jobs={jobs}
+            selectedJobId={selectedJobId}
             onSelectJob={setSelectedJobId}
             homeLocation={homeLocation}
             transitRoutes={transitRoutes}
-            fullScreen={true} 
+            fullScreen={true}
           />
         </div>
       </div>
 
-      {/* 스크린샷 모달 */}
       {isScreenshotOpen && selectedJob && (
-        <div 
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-10 animate-fade-in cursor-pointer"
           onClick={() => setIsScreenshotOpen(false)}
         >
-          <div 
+          <div
             className="bg-white w-[800px] h-[90%] rounded-2xl shadow-2xl flex flex-col overflow-hidden relative animate-slide-up cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
@@ -464,17 +543,16 @@ export function Dashboard() {
                 <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
                   {selectedJob.company} <span className="text-slate-300">|</span> {getJobRole(selectedJob)}
                 </h3>
-                <a 
-                  href={selectedJob.detail?.originalUrl} 
-                  target="_blank" 
+                <a
+                  href={selectedJob.detail?.originalUrl}
+                  target="_blank"
                   rel="noreferrer"
                   className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 mt-1 hover:underline"
                 >
                   {selectedJob.detail?.originalUrl} <ExternalLink size={10} />
                 </a>
               </div>
-              
-              <button 
+              <button
                 onClick={() => setIsScreenshotOpen(false)}
                 className="p-2 hover:bg-slate-100 rounded-full transition-colors group"
                 title="닫기 (Esc)"
@@ -482,7 +560,6 @@ export function Dashboard() {
                 <X size={28} className="text-slate-400 group-hover:text-slate-700" />
               </button>
             </div>
-
             <div className="flex-1 overflow-y-auto bg-slate-100 p-4">
               {selectedJob.detail?.screenshot ? (
                 <img src={`data:image/jpeg;base64,${selectedJob.detail.screenshot}`} alt="Original Capture" className="w-full h-auto rounded shadow-sm" />
@@ -496,7 +573,6 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* 집 위치 설정 모달 */}
       {showHomeSettings && (
         <HomeLocationSettings
           onClose={() => setShowHomeSettings(false)}
