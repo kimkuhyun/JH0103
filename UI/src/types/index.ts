@@ -1,18 +1,21 @@
 export type JobStatus = 
-  | 'INBOX'      // 받은편지함
+  | 'PENDING'    // 대기중
+  | 'DRAFT'      // 작성중
   | 'APPLIED'    // 지원 완료
-  | 'ARCHIVED';  // 보관됨
+  | 'CLOSED';    // 종료됨
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
-  INBOX: '받은편지함',
+  PENDING: '대기중',
+  DRAFT: '작성중',
   APPLIED: '지원 완료',
-  ARCHIVED: '보관됨',
+  CLOSED: '종료됨',
 };
 
 export const JOB_STATUS_COLORS: Record<JobStatus, { bg: string; text: string; border: string }> = {
-  INBOX: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
+  PENDING: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-100' },
+  DRAFT: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-100' },
   APPLIED: { bg: 'bg-teal-50', text: 'text-teal-600', border: 'border-teal-100' },
-  ARCHIVED: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' },
+  CLOSED: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200' },
 };
 
 export interface Job {
