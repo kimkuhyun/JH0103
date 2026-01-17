@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
+import com.jh0103.core.job.domain.Job;
+import java.util.List;
 
 @Getter
 @NoArgsConstructor
@@ -32,6 +34,9 @@ public class User{
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
+
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<Job> jobs;
 
     @Builder
     public User(String name, String email, String picture, String provider, String providerId, Role role){

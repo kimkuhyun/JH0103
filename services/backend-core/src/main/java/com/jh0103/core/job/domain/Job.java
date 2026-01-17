@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.jh0103.core.user.domain.User;
 import java.time.LocalDateTime;
 
 @Getter
@@ -16,8 +17,9 @@ public class Job {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id")
-    private Long userId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     @Column(name = "company_name", nullable = false)
     private String companyName;
@@ -42,6 +44,9 @@ public class Job {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @OneToOne(mappedBy = "job", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private com.jh0103.core.company.domain.Company company;
+
 
     @PrePersist
     public void prePersist() {
@@ -49,10 +54,10 @@ public class Job {
     }
 
     @Builder
-    // 생성자에도 screenshot 파라미터 추가
-    public Job(Long userId, String companyName, String roleName, JobStatus status, 
+    // 생성자에도 user 파라미터 추가
+    public Job(User user, String companyName, String roleName, JobStatus status, 
                String originalUrl, String jobDetailJson, String screenshot) {
-        this.userId = userId;
+        this.user = user;
         this.companyName = companyName;
         this.roleName = roleName;
         this.status = status;

@@ -57,10 +57,11 @@ public class JobService {
         }
 
         Long userId = 1L;
+        User foundUser = null;
         if (userEmail != null && !userEmail.isEmpty()) {
             Optional<User> user = userRepository.findByEmail(userEmail);
             if (user.isPresent()) {
-                userId = user.get().getId();
+                foundUser = user.get();
             } else {
                 log.warn("⚠️ 유저 찾기 실패: {}", userEmail);
             }
@@ -76,7 +77,7 @@ public class JobService {
 
         // 2. 엔티티 생성
         Job job = Job.builder()
-                .userId(userId)
+                .user(foundUser)
                 .companyName(companyName) 
                 .roleName(roleName)
                 .status(JobStatus.PENDING)
