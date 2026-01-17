@@ -41,7 +41,12 @@ public class JobService {
             Map<String, Object> companyInfo = (Map<String, Object>) fullData.get("company_info");
             if (companyInfo != null) {
                 String rawName = (String) companyInfo.getOrDefault("name", companyName);
-                companyName = rawName.replaceAll("(^\\s*[\\(（]주[\\)）]\\s*)|(\\s*[\\(（]주[\\)）]\\s*$)|(^\\s*주식회사\\s*)|(\\s*주식회사\\s*$)", "").trim();
+                companyName = rawName
+                    .replaceAll("^(주)?\\s*\\(주\\)", "")  // 주(주), (주) 제거
+                    .replaceAll("^주\\)", "")               // 주) 제거
+                    .replaceAll("^㈜", "")                  // ㈜ 제거
+                    .replaceAll("^주식회사\\s*", "")       // 주식회사 제거
+                    .trim();
             }
 
             // 공고명 추출: job_summary -> title
