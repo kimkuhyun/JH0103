@@ -1,0 +1,63 @@
+use_default_settings: true
+
+server:
+  secret_key: "mcp-company-search-secret-2025"
+  limiter: false
+  image_proxy: true
+  bind_address: "0.0.0.0"
+  port: 8080
+
+search:
+  safe_search: 0
+  autocomplete: "google"
+  default_lang: "ko"
+  formats:
+    - html
+    - json
+
+engines:
+  # 한국 검색 엔진
+  - name: naver
+    engine: naver
+    disabled: false
+    shortcut: nv
+    
+  - name: daum
+    engine: xpath
+    search_url: https://search.daum.net/search?w=tot&q={query}
+    results_xpath: //div[@class='coll_tit']/a
+    url_xpath: ./@href
+    title_xpath: ./text()
+    disabled: false
+    shortcut: dm
+
+  # 글로벌 검색 엔진
+  - name: google
+    engine: google
+    disabled: false
+    use_mobile_ui: false
+    shortcut: go
+
+  - name: bing
+    engine: bing
+    disabled: false
+    shortcut: bi
+
+  # 뉴스 전용
+  - name: google news
+    engine: google_news
+    disabled: false
+    shortcut: gn
+
+  - name: naver news
+    engine: xpath
+    search_url: https://search.naver.com/search.naver?where=news&query={query}
+    results_xpath: //a[@class='news_tit']
+    url_xpath: ./@href
+    title_xpath: ./text()
+    disabled: false
+    shortcut: nvn
+
+outgoing:
+  request_timeout: 10.0
+  max_request_timeout: 15.0

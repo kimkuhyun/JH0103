@@ -109,6 +109,57 @@ services:
       SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
     command: ["gradle", "test", "--no-daemon"]
+  
+  searxng:
+    image: searxng/searxng:latest
+    container_name: mcp-searxng
+    ports:
+      - "9000:8080"
+    volumes:
+      - ./ai-engine/companyAI/searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:9000/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    networks:        
+      - app-network
+
+  redis:
+    image: redis:alpine
+    container_name: mcp-redis
+    networks:        
+      - app-network
+
+  browserless:
+    image: ghcr.io/browserless/chromium:latest
+    container_name: mcp-browserless
+    ports:
+      - "3000:3000"
+    environment:
+        - "MAX_CONCURRENT_SESSIONS=10"
+    shm_size: "2gb"
+    networks:        
+      - app-network
+    
+  company-search-server:
+    build:
+      context: ./ai-engine/companyAI
+    container_name: company-search-server
+    ports:
+      - "4000:4000"
+    depends_on:
+      - searxng
+      - browserless
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - BROWSERLESS_URL=http://browserless:3000
+      - PORT=4000
+    networks:        
+      - app-network
 
 volumes:
   db-data:
