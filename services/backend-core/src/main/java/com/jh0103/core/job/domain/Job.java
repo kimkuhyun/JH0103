@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import com.jh0103.core.user.domain.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 @Getter
@@ -19,6 +20,7 @@ public class Job {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
 
     @Column(name = "company_name", nullable = false)
@@ -45,6 +47,7 @@ public class Job {
     private LocalDateTime createdAt;
 
     @OneToOne(mappedBy = "job", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    @JsonIgnore
     private com.jh0103.core.company.domain.Company company;
 
 

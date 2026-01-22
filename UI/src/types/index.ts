@@ -110,3 +110,21 @@ export interface JobJsonV2 {
   };
   analysis?: any;
 }
+
+// 회사 조사 관련 타입
+export interface CompanyResearchData {
+  companyId: number;
+  jobId: number;
+  companySearchResult: any; // 유연한 JSON 형식
+  createdAt: string;
+}
+
+export interface CompanyResearchResponse {
+  success: boolean;
+  exists?: boolean;
+  message?: string;
+  data?: CompanyResearchData;
+  error?: string;
+}
+
+export type ResearchStatus = 'idle' | 'searching' | 'crawling' | 'analyzing' | 'completed' | 'error';

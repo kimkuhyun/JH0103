@@ -1,14 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import type { Job, JobStatus, BackendJob } from '../types/index';
+import type { Job, JobStatus, BackendJob, ResearchStatus } from '../types/index';
 import { JOB_STATUS_LABELS as STATUS_LABELS, JOB_STATUS_COLORS as STATUS_COLORS } from '../types/index';
 import { KakaoMapContainer } from '../components/map/KakaoMapContainer';
-import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Building2, Home as HomeIcon, Maximize2, Trash2, Briefcase, Search, Check} from 'lucide-react';
+import { Plus, Filter, Clock, Navigation, MapPin, X, ExternalLink, Building2, Home as HomeIcon, Maximize2, Trash2, Briefcase, Search, Check, Loader2 } from 'lucide-react';
 import { parseJsonToJob } from '../utils/jobParser';
 import { normalizeJobJson } from '../utils/jsonNormalizer';
 import { HomeLocationSettings } from '../components/settings/HomeLocationSettings';
 import { searchTransitRoute, formatRouteInfo } from '../utils/odsayApi';
 import type { TransitRoute } from '../utils/odsayApi';
 import { DynamicJobDetail } from '../components/job/DynamicJobDetail';
+import { CompanyResearch } from '../components/company/CompanyResearch';
+import { DynamicCompanyDetail } from '../components/company/DynamicCompanyDetail';
 
 interface HomeLocation {
   address: string;
@@ -61,10 +63,27 @@ export function Dashboard() {
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [researchStatus, setResearchStatus] = useState<ResearchStatus>('idle');
+  const [companyResearchData, setCompanyResearchData] = useState<any>(null);
+  const [showResearchResult, setShowResearchResult] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedJob = jobs.find(j => j.id === selectedJobId);
   const [isScreenshotOpen, setIsScreenshotOpen] = useState(false);
+
+  // 다른 공고 선택 시 회사 조사 결과 닫기
+  useEffect(() => {
+    setShowResearchResult(false);
+    setResearchStatus('idle');
+    setCompanyResearchData(null);
+  }, [selectedJobId]);
+
+  // companyResearchData가 null이 되면 자동으로 결과 닫기
+  useEffect(() => {
+    if (companyResearchData === null) {
+      setShowResearchResult(false);
+    }
+  }, [companyResearchData]);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -512,6 +531,15 @@ export function Dashboard() {
                     상세 정보를 불러올 수 없습니다.
                   </div>
                 )}
+                
+                <CompanyResearch
+                  jobId={selectedJob.id}
+                  companyName={selectedJob.company}
+                  onStatusChange={setResearchStatus}
+                  onDataLoaded={setCompanyResearchData}
+                  onToggleView={setShowResearchResult}
+                />
+                
                 <div className="sticky bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-sm border-t border-slate-100 mt-8">
                   <button
                     onClick={() => setIsScreenshotOpen(true)}
@@ -526,14 +554,50 @@ export function Dashboard() {
         )}
 
         <div className="flex-1 relative bg-slate-100 overflow-hidden">
-          <KakaoMapContainer
-            jobs={jobs}
-            selectedJobId={selectedJobId}
-            onSelectJob={setSelectedJobId}
-            homeLocation={homeLocation}
-            transitRoutes={transitRoutes}
-            fullScreen={true}
-          />
+          {(researchStatus === 'searching' || researchStatus === 'crawling' || researchStatus === 'analyzing') ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 size={48} className="text-teal-600 animate-spin" />
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold text-slate-800 mb-1">
+                      회사 조사 진행 중
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      홈페이지 크롤링 및 AI 분석 중
+                    </p>
+                    <p className="text-xs text-slate-400 mt-2">
+                      30초~1분 정도 소요됩니다
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : showResearchResult && companyResearchData ? (
+            <div className="h-full overflow-y-auto bg-slate-50 p-8">
+              <div className="max-w-4xl mx-auto">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-slate-800 mb-2">회사 조사 결과</h2>
+                  <p className="text-sm text-slate-500">
+                    {selectedJob?.company}에 대한 상세 분석
+                  </p>
+                </div>
+                <DynamicCompanyDetail 
+                  data={companyResearchData} 
+                  companyName={selectedJob?.company || ''} 
+                />
+              </div>
+            </div>
+          ) : (
+            <KakaoMapContainer
+              jobs={jobs}
+              selectedJobId={selectedJobId}
+              onSelectJob={setSelectedJobId}
+              homeLocation={homeLocation}
+              transitRoutes={transitRoutes}
+              fullScreen={true}
+            />
+          )}
         </div>
       </div>
 

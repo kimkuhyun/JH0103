@@ -155,9 +155,13 @@ services:
       - searxng
       - browserless
     environment:
-      - SEARXNG_URL=http://searxng:8080
-      - BROWSERLESS_URL=http://browserless:3000
+      - SEARXNG_URL=${SEARXNG_URL}
+      - BROWSERLESS_URL=${BROWSERLESS_URL}
+      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
       - PORT=4000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:        
       - app-network
 
